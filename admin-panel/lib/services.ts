@@ -127,14 +127,18 @@ export function publishSchedule(): Promise<ScheduleVersion> {
   });
 }
 
-export function getScheduleVersions(): Promise<ScheduleVersion[]> {
-  return apiRequest<ScheduleVersion[]>("/schedule/versions");
+export async function getScheduleVersions(): Promise<ScheduleVersion[]> {
+  const d = await apiRequest<{ versions?: ScheduleVersion[] } | ScheduleVersion[]>(
+    "/schedule/versions"
+  );
+  return Array.isArray(d) ? d : (d?.versions ?? []);
 }
 
 // ---- Audio ----
 
-export function getAudioList(): Promise<AzanAudio[]> {
-  return apiRequest<AzanAudio[]>("/audio");
+export async function getAudioList(): Promise<AzanAudio[]> {
+  const d = await apiRequest<{ audio?: AzanAudio[] } | AzanAudio[]>("/audio");
+  return Array.isArray(d) ? d : (d?.audio ?? []);
 }
 
 export function uploadAudio(
@@ -154,8 +158,11 @@ export function uploadAudio(
 
 // ---- Announcements ----
 
-export function listAnnouncements(): Promise<Announcement[]> {
-  return apiRequest<Announcement[]>("/announcements");
+export async function listAnnouncements(): Promise<Announcement[]> {
+  const d = await apiRequest<{ announcements?: Announcement[] } | Announcement[]>(
+    "/announcements"
+  );
+  return Array.isArray(d) ? d : (d?.announcements ?? []);
 }
 
 // Multipart create: either an `audio` MP3 file OR an existing `audioId`,
@@ -202,8 +209,11 @@ export function uploadAppRelease(form: FormData): Promise<AppRelease> {
   });
 }
 
-export function listAppReleases(): Promise<AppRelease[]> {
-  return apiRequest<AppRelease[]>("/app/releases");
+export async function listAppReleases(): Promise<AppRelease[]> {
+  const d = await apiRequest<{ releases?: AppRelease[] } | AppRelease[]>(
+    "/app/releases"
+  );
+  return Array.isArray(d) ? d : (d?.releases ?? []);
 }
 
 export function getLatestVersion(): Promise<LatestVersion> {
@@ -212,8 +222,9 @@ export function getLatestVersion(): Promise<LatestVersion> {
 
 // ---- Devices ----
 
-export function getDevices(): Promise<Device[]> {
-  return apiRequest<Device[]>("/devices");
+export async function getDevices(): Promise<Device[]> {
+  const d = await apiRequest<{ devices?: Device[] } | Device[]>("/devices");
+  return Array.isArray(d) ? d : (d?.devices ?? []);
 }
 
 // ---- Admin actions ----
