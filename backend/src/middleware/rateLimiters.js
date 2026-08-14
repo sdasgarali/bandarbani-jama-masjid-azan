@@ -21,3 +21,7 @@ export const adminLimiter = rateLimit({ ...base, windowMs: 60_000, max: 120 });
 
 // Device register: 30/min/IP.
 export const deviceRegisterLimiter = rateLimit({ ...base, windowMs: 60_000, max: 30 });
+
+// Public, unauthenticated read access (streaming audio/APK files). Higher ceiling because
+// HTTP Range requests for a single media file can produce several requests.
+export const publicReadLimiter = rateLimit({ ...base, windowMs: 60_000, max: 240 });

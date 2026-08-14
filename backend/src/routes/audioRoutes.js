@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { validate } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireDevice } from '../middleware/deviceAuth.js';
-import { adminLimiter } from '../middleware/rateLimiters.js';
+import { adminLimiter, publicReadLimiter } from '../middleware/rateLimiters.js';
 import { audioUpload } from '../middleware/upload.js';
 import { audioVersionParamSchema } from '../validators/schemas.js';
 import {
@@ -11,29 +10,24 @@ import {
   audioMeta,
   streamAudio,
 } from '../controllers/audioController.js';
-import { asyncHandler } from '../utils/asyncHandler.js';
-import { AppError } from '../utils/errors.js';
 
 const router = Router();
 
-// Allow either admin OR device auth for read-only file/meta access.
-const requireAdminOrDevice = asyncHandler(async (req, res, next) => {
-  if (req.headers.authorization) return requireAuth(req, res, next);
-  if (req.get('X-Device-Id')) return requireDevice(req, res, next);
-  throw new AppError('AUTH_INVALID', 'Authentication required');
-});
-
 router.post('/', requireAuth, adminLimiter, audioUpload.single('file'), uploadAudio);
 router.get('/', requireAuth, adminLimiter, listAudio);
+
+// Public read: audio recordings are not sensitive and the admin panel's <audio> element
+// (and the Android media player) cannot attach auth headers. Consistent with the public
+// APK-file route. Rate-limited to prevent abuse.
 router.get(
   '/:version/meta',
-  requireAdminOrDevice,
+  publicReadLimiter,
   validate(audioVersionParamSchema, 'params'),
   audioMeta
 );
 router.get(
   '/:version/file',
-  requireAdminOrDevice,
+  publicReadLimiter,
   validate(audioVersionParamSchema, 'params'),
   streamAudio
 );
