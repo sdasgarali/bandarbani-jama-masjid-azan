@@ -102,10 +102,14 @@ export const sendTestAzan = (deviceIds) => sendData({ type: 'TEST_AZAN' }, devic
 export const sendTestNotification = (title, body, deviceIds) =>
   sendData({ type: 'TEST_NOTIFICATION', title: String(title), body: String(body) }, deviceIds);
 
+export const sendAppUpdateAvailable = (versionCode, deviceIds) =>
+  sendData({ type: 'APP_UPDATE_AVAILABLE', versionCode: String(versionCode) }, deviceIds);
+
 export default {
   sendData,
   sendScheduleUpdated,
   sendConfigUpdated,
   sendTestAzan,
   sendTestNotification,
+  sendAppUpdateAvailable,
 };

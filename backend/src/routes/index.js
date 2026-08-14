@@ -4,6 +4,7 @@ import scheduleRoutes from './scheduleRoutes.js';
 import audioRoutes from './audioRoutes.js';
 import deviceRoutes from './deviceRoutes.js';
 import adminRoutes from './adminRoutes.js';
+import appRoutes from './appRoutes.js';
 
 const router = Router();
 
@@ -13,5 +14,6 @@ router.use('/schedule', scheduleRoutes);
 router.use('/audio', audioRoutes);
 router.use('/devices', deviceRoutes);
 router.use('/admin', adminRoutes);
+router.use('/app', appRoutes);
 
 export default router;

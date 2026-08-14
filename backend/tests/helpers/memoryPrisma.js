@@ -134,6 +134,7 @@ export function createMemoryPrisma() {
     prayerTime: new Model({ enabled: true, audioEnabled: true, notificationEnabled: true }),
     scheduleVersion: new Model({ publishedAt: () => new Date() }),
     azanAudio: new Model({ isActive: false, durationMs: null }),
+    appRelease: new Model({ mandatory: false, notes: null, uploadedById: null }),
     appConfig: new Model({}),
     device: new Model({ platform: 'android', status: 'ACTIVE', lastActiveAt: () => new Date() }),
     fcmToken: new Model({ isActive: true }),

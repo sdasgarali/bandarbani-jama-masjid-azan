@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paths shared via androidx.core.content.FileProvider (authority "${applicationId}.fileprovider").
+  Only the in-app-update APK directory is exposed so the system package-installer can read the
+  downloaded .apk. Keep these names in sync with Constants.UPDATES_DIR.
+
+  - external-files-path "updates" -> getExternalFilesDir("updates")   (primary download location)
+  - cache-path        "updates"   -> cacheDir/updates                 (fallback when external is null)
+-->
+<paths>
+    <external-files-path name="updates" path="updates/" />
+    <cache-path name="cache_updates" path="updates/" />
+</paths>

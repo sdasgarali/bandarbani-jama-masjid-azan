@@ -26,6 +26,10 @@
     <!-- Battery optimization guidance deep-link. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- In-app APK auto-update: launch the system installer for a downloaded release (no Play Store).
+         The user must still grant "Install unknown apps" for this app at runtime (API 26+). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".AzanApplication"
         android:allowBackup="false"
@@ -95,6 +99,19 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Shares the downloaded update APK with the system package-installer (in-app auto-update).
+             Paths declared in res/xml/file_paths.xml (updates/ dir only). Authority mirrors
+             Constants.FILE_PROVIDER_AUTHORITY_SUFFIX. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- Default notification channel + icon for any FCM fallback display. -->
         <meta-data

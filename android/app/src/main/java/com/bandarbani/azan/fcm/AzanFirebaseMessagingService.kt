@@ -8,6 +8,7 @@ import com.bandarbani.azan.data.prefs.DeviceCredentialStore
 import com.bandarbani.azan.data.repository.AzanRepository
 import com.bandarbani.azan.notifications.NotificationHelper
 import com.bandarbani.azan.playback.AzanPlaybackService
+import com.bandarbani.azan.update.UpdateManager
 import com.bandarbani.azan.work.SyncWorker
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -23,6 +24,8 @@ import javax.inject.Inject
  *  - SCHEDULE_UPDATED / CONFIG_UPDATED → enqueue SyncWorker.
  *  - TEST_AZAN                         → play the cached (local) azan once.
  *  - TEST_NOTIFICATION                → show a local notification.
+ *  - APP_UPDATE_AVAILABLE             → re-check /app/latest-version; if newer, post an
+ *                                       "update available" notification that opens the app.
  * On token refresh → PUT /devices/fcm-token (if already registered).
  */
 @AndroidEntryPoint
@@ -31,6 +34,7 @@ class AzanFirebaseMessagingService : FirebaseMessagingService() {
     @Inject lateinit var repository: AzanRepository
     @Inject lateinit var notificationHelper: NotificationHelper
     @Inject lateinit var credentials: DeviceCredentialStore
+    @Inject lateinit var updateManager: UpdateManager
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -49,7 +53,23 @@ class AzanFirebaseMessagingService : FirebaseMessagingService() {
                 val body = data["body"] ?: "Test notification"
                 notificationHelper.postSimpleNotification(title, body)
             }
+            TYPE_APP_UPDATE_AVAILABLE -> checkForUpdateAndNotify()
             else -> Log.d(TAG, "Unknown FCM type=$type")
+        }
+    }
+
+    /**
+     * Re-check the latest release. If a newer version exists, post a tap-to-open notification so the
+     * user can install it (the update dialog surfaces on Home). Offline / no-update → nothing shown.
+     */
+    private fun checkForUpdateAndNotify() {
+        scope.launch {
+            val info = updateManager.checkForUpdate()
+            if (info != null) {
+                notificationHelper.postUpdateNotification(info.versionName)
+            } else {
+                Log.i(TAG, "APP_UPDATE_AVAILABLE received but no newer version found.")
+            }
         }
     }
 
@@ -92,5 +112,6 @@ class AzanFirebaseMessagingService : FirebaseMessagingService() {
         private const val TYPE_CONFIG_UPDATED = "CONFIG_UPDATED"
         private const val TYPE_TEST_AZAN = "TEST_AZAN"
         private const val TYPE_TEST_NOTIFICATION = "TEST_NOTIFICATION"
+        private const val TYPE_APP_UPDATE_AVAILABLE = "APP_UPDATE_AVAILABLE"
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bandarbani.azan.core.Prayer
 import com.bandarbani.azan.permissions.PermissionUtils
+import com.bandarbani.azan.ui.update.UpdateDialog
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,7 +48,20 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val updateDialogVisible by viewModel.updateDialogVisible.collectAsStateWithLifecycle()
+    val checkingUpdates by viewModel.checking.collectAsStateWithLifecycle()
+    val upToDate by viewModel.upToDate.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    if (updateDialogVisible) {
+        UpdateDialog(
+            state = updateState,
+            onUpdate = viewModel::startDownload,
+            onInstall = viewModel::install,
+            onDismiss = viewModel::dismissUpdateDialog,
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -177,14 +192,39 @@ fun SettingsScreen(
                 )
             }
 
-            // App info
+            // App info + in-app updates
             SettingCard("App info") {
-                Text("Version: ${state.appVersion}")
+                Text("Version: ${state.appVersion} (build ${state.appVersionCode})")
                 Text(
                     "API: ${state.apiBaseUrl}",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = viewModel::checkForUpdates,
+                    enabled = !checkingUpdates,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (checkingUpdates) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.height(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                        Text("  Checking…")
+                    } else {
+                        Text("Check for updates")
+                    }
+                }
+                if (upToDate) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "You're up to date (v${state.appVersion}).",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

@@ -18,6 +18,7 @@ const NAV: NavItem[] = [
   { href: "/audio", label: "Azan Audio", icon: "🔊" },
   { href: "/devices", label: "Devices", icon: "📱" },
   { href: "/versions", label: "App Versions", icon: "🏷️" },
+  { href: "/updates", label: "App Updates", icon: "⬆️" },
 ];
 
 export function Sidebar() {

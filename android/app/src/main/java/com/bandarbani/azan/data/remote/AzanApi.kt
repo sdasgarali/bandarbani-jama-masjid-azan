@@ -5,6 +5,7 @@ import com.bandarbani.azan.data.remote.dto.AudioMetaDto
 import com.bandarbani.azan.data.remote.dto.FcmTokenRequest
 import com.bandarbani.azan.data.remote.dto.HeartbeatRequest
 import com.bandarbani.azan.data.remote.dto.HeartbeatResponse
+import com.bandarbani.azan.data.remote.dto.LatestVersionDto
 import com.bandarbani.azan.data.remote.dto.RegisterDeviceRequest
 import com.bandarbani.azan.data.remote.dto.RegisterDeviceResponse
 import com.bandarbani.azan.data.remote.dto.SchedulePayloadDto
@@ -54,6 +55,16 @@ interface AzanApi {
     suspend fun getAudioMeta(
         @Path("version") version: Int,
     ): Response<ApiEnvelope<AudioMetaDto>>
+
+    /**
+     * Latest published app release for in-app auto-update (API.md §"App releases / auto-update").
+     * Public endpoint — needs no device auth (the DeviceAuthInterceptor still attaches its headers,
+     * which is harmless here). 404 if there are no releases yet; the [UpdateManager] treats that as
+     * "no update". The APK bytes are fetched separately via [downloadAudio]-style OkHttp streaming
+     * (see UpdateManager) so the whole file is never buffered in memory.
+     */
+    @GET("app/latest-version")
+    suspend fun latestVersion(): ApiEnvelope<LatestVersionDto>
 
     /**
      * Streams the MP3 for a given version. We pass a full/relative URL so the payload's

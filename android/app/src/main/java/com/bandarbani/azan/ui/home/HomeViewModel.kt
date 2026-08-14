@@ -1,13 +1,19 @@
 package com.bandarbani.azan.ui.home
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bandarbani.azan.data.prefs.SettingsStore
 import com.bandarbani.azan.data.repository.AzanRepository
 import com.bandarbani.azan.domain.PrayerScheduleView
+import com.bandarbani.azan.update.UpdateInfo
+import com.bandarbani.azan.update.UpdateManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
@@ -16,6 +22,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val loading: Boolean = true,
@@ -32,6 +39,8 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val repository: AzanRepository,
     private val settings: SettingsStore,
+    private val updateManager: UpdateManager,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     /** A 1Hz ticker so the countdown updates live. */
@@ -81,4 +90,54 @@ class HomeViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = HomeUiState(),
         )
+
+    // ---- In-app auto-update ----
+
+    /** Shared updater state (Idle/Checking/Available/Downloading/ReadyToInstall/Error). */
+    val updateState: StateFlow<UpdateManager.State> = updateManager.state
+
+    /**
+     * Set true once we've surfaced the dialog for a discovered update so it isn't re-shown after the
+     * user taps "Later". A mandatory update ignores this and the dialog blocks use regardless.
+     */
+    private val _updateDialogVisible = MutableStateFlow(false)
+    val updateDialogVisible: StateFlow<Boolean> = _updateDialogVisible.asStateFlow()
+
+    /** Called once on first composition: silently check and auto-show the dialog if newer exists. */
+    fun checkForUpdateOnLoad() {
+        viewModelScope.launch {
+            val info = updateManager.checkForUpdate()
+            if (info != null) {
+                _updateDialogVisible.value = true
+            }
+        }
+    }
+
+    fun startDownload() {
+        val info = currentUpdateInfo() ?: return
+        _updateDialogVisible.value = true
+        viewModelScope.launch { runCatching { updateManager.downloadApk(info) } }
+    }
+
+    fun install() {
+        val ready = updateState.value as? UpdateManager.State.ReadyToInstall ?: return
+        updateManager.installApk(context, ready.file)
+    }
+
+    fun dismissUpdateDialog() {
+        _updateDialogVisible.value = false
+    }
+
+    /** Re-open the dialog from the banner/chip tap. */
+    fun showUpdateDialog() {
+        _updateDialogVisible.value = true
+    }
+
+    private fun currentUpdateInfo(): UpdateInfo? = when (val s = updateState.value) {
+        is UpdateManager.State.Available -> s.info
+        is UpdateManager.State.Downloading -> s.info
+        is UpdateManager.State.ReadyToInstall -> s.info
+        is UpdateManager.State.Error -> s.info
+        else -> null
+    }
 }

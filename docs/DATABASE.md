@@ -26,6 +26,7 @@ so there are no SQL migrations — `db push` syncs indexes/constraints). All tim
 | `Device`         | Registered Android installs. |
 | `FcmToken`       | Current FCM token per device (history-friendly). |
 | `AuditLog`       | Every admin mutation. |
+| `AppRelease`     | Hosted APK builds for in-app auto-update (versionCode, apk file ref, checksum). |
 
 ## Relationships
 - `PrayerSchedule` 1—* `PrayerTime`.
@@ -65,6 +66,12 @@ so there are no SQL migrations — `db push` syncs indexes/constraints). All tim
 
 ### FcmToken
 `id, deviceId, token (unique), isActive, createdAt, updatedAt`
+
+### AppRelease
+`id (ObjectId), versionCode (unique Int), versionName (String), notes (String?),
+ mandatory (Bool default false), apkStoredName (String), apkOriginalName (String),
+ sizeBytes (Int), checksumSha256 (String), uploadedById (ObjectId?), createdAt`
+ — "latest" = row with the max `versionCode`.
 
 ### AppConfig
 `id (ObjectId), key (unique String), value (Json), updatedAt`  — e.g. `{"key":"active_audio_id","value":"..."}`

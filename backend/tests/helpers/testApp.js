@@ -31,6 +31,9 @@ export async function buildTestApp() {
     sendTestNotification: jest
       .fn()
       .mockResolvedValue({ enabled: false, sent: 0, failed: 0, tokens: 0 }),
+    sendAppUpdateAvailable: jest
+      .fn()
+      .mockResolvedValue({ enabled: false, sent: 0, failed: 0, tokens: 0 }),
   };
 
   jest.unstable_mockModule(prismaMockSpecifier, () => ({

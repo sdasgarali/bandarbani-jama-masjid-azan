@@ -8,6 +8,7 @@ import com.bandarbani.azan.data.local.entity.PrayerTimeEntity
 import com.bandarbani.azan.data.prefs.SettingsStore
 import com.bandarbani.azan.data.repository.AzanRepository
 import com.bandarbani.azan.permissions.PermissionUtils
+import com.bandarbani.azan.update.UpdateManager
 import com.bandarbani.azan.work.SyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,6 +30,7 @@ data class SettingsUiState(
     val exactAlarmsAllowed: Boolean = true,
     val batteryOptimized: Boolean = false,
     val appVersion: String = BuildConfig.VERSION_NAME,
+    val appVersionCode: Int = BuildConfig.VERSION_CODE,
     val apiBaseUrl: String = BuildConfig.API_BASE_URL,
 )
 
@@ -37,6 +39,7 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repository: AzanRepository,
     private val settings: SettingsStore,
+    private val updateManager: UpdateManager,
 ) : ViewModel() {
 
     // Recomputed on each screen resume via refreshPermissionState().
@@ -73,6 +76,21 @@ class SettingsViewModel @Inject constructor(
     private val _syncing = MutableStateFlow(false)
     val syncing: StateFlow<Boolean> = _syncing.asStateFlow()
 
+    // ---- In-app auto-update ----
+
+    /** Shared updater state (see [UpdateManager.State]). */
+    val updateState: StateFlow<UpdateManager.State> = updateManager.state
+
+    private val _updateDialogVisible = MutableStateFlow(false)
+    val updateDialogVisible: StateFlow<Boolean> = _updateDialogVisible.asStateFlow()
+
+    /** True once a manual check completed and found no newer version (drives the "up to date" msg). */
+    private val _upToDate = MutableStateFlow(false)
+    val upToDate: StateFlow<Boolean> = _upToDate.asStateFlow()
+
+    private val _checking = MutableStateFlow(false)
+    val checking: StateFlow<Boolean> = _checking.asStateFlow()
+
     fun refreshPermissionState() {
         permissionState.value = Pair(
             PermissionUtils.canScheduleExactAlarms(context),
@@ -90,5 +108,41 @@ class SettingsViewModel @Inject constructor(
 
     fun syncNow() {
         SyncWorker.enqueueOneShot(context)
+    }
+
+    /** Manual "Check for updates": shows the dialog if a newer version exists, else "up to date". */
+    fun checkForUpdates() {
+        _upToDate.value = false
+        _checking.value = true
+        viewModelScope.launch {
+            val info = updateManager.checkForUpdate()
+            _checking.value = false
+            if (info != null) {
+                _updateDialogVisible.value = true
+            } else {
+                _upToDate.value = true
+            }
+        }
+    }
+
+    fun startDownload() {
+        val info = when (val s = updateState.value) {
+            is UpdateManager.State.Available -> s.info
+            is UpdateManager.State.Downloading -> s.info
+            is UpdateManager.State.ReadyToInstall -> s.info
+            is UpdateManager.State.Error -> s.info
+            else -> null
+        } ?: return
+        _updateDialogVisible.value = true
+        viewModelScope.launch { runCatching { updateManager.downloadApk(info) } }
+    }
+
+    fun install() {
+        val ready = updateState.value as? UpdateManager.State.ReadyToInstall ?: return
+        updateManager.installApk(context, ready.file)
+    }
+
+    fun dismissUpdateDialog() {
+        _updateDialogVisible.value = false
     }
 }

@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +37,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bandarbani.azan.core.Prayer
 import com.bandarbani.azan.domain.PrayerScheduleView
+import com.bandarbani.azan.update.UpdateManager
+import com.bandarbani.azan.ui.update.UpdateDialog
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -46,6 +51,20 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val updateDialogVisible by viewModel.updateDialogVisible.collectAsStateWithLifecycle()
+
+    // Check for an app update once when Home is first shown (offline-safe; never blocks the UI).
+    LaunchedEffect(Unit) { viewModel.checkForUpdateOnLoad() }
+
+    if (updateDialogVisible) {
+        UpdateDialog(
+            state = updateState,
+            onUpdate = viewModel::startDownload,
+            onInstall = viewModel::install,
+            onDismiss = viewModel::dismissUpdateDialog,
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -81,10 +100,52 @@ fun HomeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            val updateInfo = updateState.availableInfo()
+            if (updateInfo != null) {
+                UpdateBanner(
+                    versionName = updateInfo.versionName,
+                    onClick = viewModel::showUpdateDialog,
+                )
+            }
             DateHeader(state)
             NextPrayerCard(state)
             TodayTimesCard(state)
             StatusCard(state)
+        }
+    }
+}
+
+/** Returns the pending [com.bandarbani.azan.update.UpdateInfo] for any non-idle updater state. */
+private fun UpdateManager.State.availableInfo() = when (this) {
+    is UpdateManager.State.Available -> info
+    is UpdateManager.State.Downloading -> info
+    is UpdateManager.State.ReadyToInstall -> info
+    is UpdateManager.State.Error -> info
+    else -> null
+}
+
+@Composable
+private fun UpdateBanner(versionName: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(Icons.Filled.SystemUpdate, contentDescription = null)
+            Column(Modifier.weight(1f)) {
+                Text("Update available", fontWeight = FontWeight.Bold)
+                Text(
+                    "Version $versionName — tap to update",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
         }
     }
 }

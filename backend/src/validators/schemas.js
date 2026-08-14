@@ -71,3 +71,23 @@ export const configUpsertSchema = z.object({
 export const audioVersionParamSchema = z.object({
   version: z.coerce.number().int().positive(),
 });
+
+// Multipart form fields arrive as strings, so coerce versionCode to int and
+// mandatory to a boolean ("true"/"false"/"1"/"0" and native bools accepted).
+const booleanish = z
+  .union([z.boolean(), z.string()])
+  .transform((v) => {
+    if (typeof v === 'boolean') return v;
+    return ['true', '1', 'yes', 'on'].includes(v.trim().toLowerCase());
+  });
+
+export const appReleaseUploadSchema = z.object({
+  versionCode: z.coerce.number().int().positive(),
+  versionName: z.string().trim().min(1),
+  notes: z.string().trim().min(1).optional(),
+  mandatory: booleanish.optional().default(false),
+});
+
+export const appReleaseVersionParamSchema = z.object({
+  versionCode: z.coerce.number().int().positive(),
+});

@@ -10,6 +10,7 @@ object Constants {
     const val NOTIF_PLAYBACK_ID = 1001
     const val NOTIF_PRAYER_BASE_ID = 2000 // + prayer.ordinal
     const val NOTIF_TEST_ID = 3001
+    const val NOTIF_UPDATE_ID = 4001
 
     // Alarm request-code namespace. requestCode = BASE + prayer.ordinal (see AlarmScheduler).
     const val ALARM_REQUEST_BASE = 10_000
@@ -27,6 +28,15 @@ object Constants {
     const val AUDIO_DIR = "azan"
     fun audioFileName(version: Int) = "azan_v$version.mp3"
     fun audioTmpName(version: Int) = "azan_v$version.mp3.tmp"
+
+    // In-app APK update storage
+    // Directory name under getExternalFilesDir()/cacheDir; MUST match res/xml/file_paths.xml.
+    const val UPDATES_DIR = "updates"
+    fun apkFileName(versionCode: Int) = "app-v$versionCode.apk"
+    fun apkTmpName(versionCode: Int) = "app-v$versionCode.apk.tmp"
+    const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+    // FileProvider authority = "${applicationId}.fileprovider" (see AndroidManifest.xml).
+    const val FILE_PROVIDER_AUTHORITY_SUFFIX = ".fileprovider"
 
     // WorkManager unique names / tags
     const val WORK_SYNC_ONESHOT = "sync_oneshot"

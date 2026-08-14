@@ -11,8 +11,12 @@ export const uploadDir = path.isAbsolute(env.UPLOAD_DIR)
   ? env.UPLOAD_DIR
   : path.join(backendRoot, env.UPLOAD_DIR);
 
+// APK builds for in-app auto-update live under uploads/apk.
+export const apkDir = path.join(uploadDir, 'apk');
+
 export function ensureUploadDir() {
   fs.mkdirSync(uploadDir, { recursive: true });
+  fs.mkdirSync(apkDir, { recursive: true });
 }
 
-export default { backendRoot, uploadDir, ensureUploadDir };
+export default { backendRoot, uploadDir, apkDir, ensureUploadDir };

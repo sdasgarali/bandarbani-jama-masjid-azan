@@ -34,6 +34,7 @@ model Admin {
 
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
+  appReleases   AppRelease[]
 
   @@map("admins")
 }
@@ -111,6 +112,25 @@ model AzanAudio {
 
   @@index([isActive])
   @@map("azan_audio")
+}
+
+model AppRelease {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  versionCode     Int      @unique
+  versionName     String
+  notes           String?
+  mandatory       Boolean  @default(false)
+  apkStoredName   String
+  apkOriginalName String
+  sizeBytes       Int
+  checksumSha256  String
+  uploadedById    String?  @db.ObjectId
+  uploadedBy      Admin?   @relation(fields: [uploadedById], references: [id])
+  createdAt       DateTime @default(now())
+
+  // versionCode is @unique, which already creates the index Prisma needs; a
+  // separate @@index([versionCode]) would be a duplicate and Prisma rejects it.
+  @@map("app_releases")
 }
 
 model AppConfig {

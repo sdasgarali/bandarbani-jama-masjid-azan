@@ -8,8 +8,10 @@ import {
 } from "./auth";
 import type {
   Admin,
+  AppRelease,
   AzanAudio,
   Device,
+  LatestVersion,
   LoginResponse,
   Prayer,
   PrayerTime,
@@ -131,6 +133,27 @@ export function uploadAudio(file: File): Promise<AzanAudio> {
     body: form,
     raw: true,
   });
+}
+
+// ---- App releases / auto-update ----
+
+// Upload a signed APK release. Expects a FormData with the `apk` file plus the
+// `versionCode`, `versionName`, `notes`, and `mandatory` fields (multipart), mirroring
+// the audio upload approach.
+export function uploadAppRelease(form: FormData): Promise<AppRelease> {
+  return apiRequest<AppRelease>("/app/releases", {
+    method: "POST",
+    body: form,
+    raw: true,
+  });
+}
+
+export function listAppReleases(): Promise<AppRelease[]> {
+  return apiRequest<AppRelease[]>("/app/releases");
+}
+
+export function getLatestVersion(): Promise<LatestVersion> {
+  return apiRequest<LatestVersion>("/app/latest-version", { skipAuth: true });
 }
 
 // ---- Devices ----

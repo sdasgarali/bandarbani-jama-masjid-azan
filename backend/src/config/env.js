@@ -29,6 +29,7 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
 
   MAX_AUDIO_MB: z.coerce.number().positive().default(10),
+  MAX_APK_MB: z.coerce.number().positive().default(100),
   UPLOAD_DIR: z.string().default('uploads'),
 
   FIREBASE_SERVICE_ACCOUNT_JSON: z.string().optional(),
@@ -59,6 +60,7 @@ export const env = {
           .map((o) => o.trim())
           .filter(Boolean),
   maxAudioBytes: raw.MAX_AUDIO_MB * 1024 * 1024,
+  maxApkBytes: raw.MAX_APK_MB * 1024 * 1024,
 };
 
 export default env;

@@ -54,6 +54,23 @@ Upload limits: mimetype `audio/mpeg`, max 10MB (configurable via `MAX_AUDIO_MB`)
 | POST | `/admin/config` | admin | `{key,value}` remote config upsert |
 | GET  | `/admin/config` | admin | list config |
 
+## App releases / auto-update (in-app APK updates, no Play Store)
+The backend hosts signed APK builds. The app checks the latest version on launch and offers
+"Update now", downloading + installing the APK itself.
+
+| Method | Path | Auth | Body / Notes |
+|---|---|---|---|
+| POST | `/app/releases` | admin | multipart `apk` (file) + fields `versionCode` (int), `versionName` (str), `notes?` (str), `mandatory?` (bool). Validates extension `.apk` + size ≤ `MAX_APK_MB` (default 100), computes sha256, stores under `uploads/apk/`. Rejects a duplicate `versionCode`. |
+| GET  | `/app/releases` | admin | list all releases (newest first) |
+| GET  | `/app/latest-version` | public | latest release by `versionCode`. → `{ versionCode, versionName, notes, mandatory, sizeBytes, checksumSha256, apkPath }`. `apkPath` is relative (`app/releases/:versionCode/file`); the app builds the absolute URL from its own API base. 404 if no releases. Supports `ETag = versionCode`. |
+| GET  | `/app/releases/:versionCode/file` | public | streams the APK (`application/vnd.android.package-archive`, `Content-Disposition: attachment`), supports Range. |
+
+The app compares the server `versionCode` with its own `BuildConfig.VERSION_CODE`. If greater →
+show the update dialog. `mandatory=true` → non-dismissible. After download, the app verifies the
+sha256, then launches the system installer via a `FileProvider` (requires the user-granted
+`REQUEST_INSTALL_PACKAGES` / "install unknown apps"). Signature must match the installed app's
+keystore or Android rejects the update.
+
 ## FCM data message contract (backend → device)
 Data-only messages (no `notification` block) so the app fully controls behavior:
 ```json
@@ -61,9 +78,12 @@ Data-only messages (no `notification` block) so the app fully controls behavior:
 { "type": "TEST_AZAN" }
 { "type": "TEST_NOTIFICATION", "title": "…", "body": "…" }
 { "type": "CONFIG_UPDATED" }
+{ "type": "APP_UPDATE_AVAILABLE", "versionCode": "2" }
 ```
 On `SCHEDULE_UPDATED` / `CONFIG_UPDATED` the app enqueues a `SyncWorker`. On `TEST_AZAN`
 the app plays the cached azan once. `TEST_NOTIFICATION` shows a local notification.
+`APP_UPDATE_AVAILABLE` (sent automatically when an admin uploads a new release) makes the app
+re-check `/app/latest-version` and surface the update prompt/notification.
 
 ## Errors / codes
 `AUTH_INVALID`, `AUTH_EXPIRED`, `VALIDATION`, `NOT_FOUND`, `RATE_LIMITED`, `FILE_INVALID`,

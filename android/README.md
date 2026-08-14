@@ -147,6 +147,54 @@ adb install app/build/outputs/apk/release/app-release.apk
 
 ---
 
+## 3b. In-app updates (auto-update, no Play Store)
+
+The app updates itself: it checks the backend for a newer signed APK, downloads it, verifies the
+sha256, and launches the system installer. There is no Play Store in this deployment.
+
+### How it works
+
+1. **On launch** (Home) and via **Settings → App info → "Check for updates"**, the app calls
+   `GET /app/latest-version` (public endpoint) and compares the server `versionCode` with its own
+   `BuildConfig.VERSION_CODE`.
+2. If the server version is **strictly greater**, an "Update available" dialog appears (plus a banner
+   on Home). `mandatory=true` makes the dialog **non-dismissible** and blocks use until updated.
+3. "Update now" streams the APK to `getExternalFilesDir("updates")/app-v<code>.apk` (never buffered
+   whole in memory), verifies the size + **sha256** against the release metadata, and deletes the
+   partial file on any mismatch/failure.
+4. "Install" launches the system package installer via a **FileProvider**
+   (`${applicationId}.fileprovider`, paths in `res/xml/file_paths.xml`). On Android 8+ the user must
+   have allowed **"Install unknown apps"** for this app; if not, the app deep-links to that settings
+   screen first and explains why.
+5. **FCM push:** when an admin uploads a new release the backend sends the data message
+   `{"type":"APP_UPDATE_AVAILABLE","versionCode":"<n>"}`. The app re-checks and, if newer, posts a
+   "tap to update" notification that opens Home and surfaces the dialog. All other FCM types
+   (`SCHEDULE_UPDATED` / `CONFIG_UPDATED` / `TEST_AZAN` / `TEST_NOTIFICATION`) are unchanged.
+
+Relevant code: `update/UpdateManager.kt`, `update/UpdateInfo.kt`, `ui/update/UpdateDialog.kt`,
+`data/remote/dto/AppReleaseDto.kt`, the `latestVersion()` endpoint in `data/remote/AzanApi.kt`, and
+the `REQUEST_INSTALL_PACKAGES` permission + FileProvider in `AndroidManifest.xml`.
+
+### Shipping a new release (per update)
+
+1. **Bump the version** in `app/build.gradle.kts` `defaultConfig`:
+   ```kotlin
+   versionCode = 2          // MUST increase every release (this is what the app compares)
+   versionName = "1.1.0"    // human-facing, shown in the dialog/notification
+   ```
+2. **Build the APK** (`./gradlew assembleRelease`) — see §4b.
+3. **Upload it** via the admin panel (`POST /app/releases` — multipart `apk` + `versionCode`,
+   `versionName`, optional `notes`, `mandatory`). The backend computes the sha256 and fans out the
+   `APP_UPDATE_AVAILABLE` FCM push.
+
+> **CRITICAL — same signing key.** The update APK **must be signed with the SAME keystore** as the
+> currently installed app, or Android **rejects** the install (signature mismatch) and the
+> auto-update silently fails. Always sign releases with your own `keystore.properties` key (§4b B)
+> and **never lose that keystore** — without it you cannot ship any install-upgradeable build.
+> A debug-key build can only upgrade another debug-key build of the same key.
+
+---
+
 ## 4. Build & run
 
 ```bash

@@ -61,6 +61,27 @@ export interface AzanAudio {
   createdAt: string;
 }
 
+export interface AppRelease {
+  id?: string;
+  versionCode: number;
+  versionName: string;
+  notes?: string | null;
+  mandatory: boolean;
+  sizeBytes: number;
+  checksumSha256: string;
+  createdAt?: string;
+}
+
+export interface LatestVersion {
+  versionCode: number;
+  versionName: string;
+  notes?: string | null;
+  mandatory: boolean;
+  sizeBytes: number;
+  checksumSha256: string;
+  apkPath: string;
+}
+
 export interface Device {
   id: string;
   deviceId: string;

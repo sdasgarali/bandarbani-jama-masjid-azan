@@ -89,6 +89,25 @@ class NotificationHelper @Inject constructor(
         safeNotify(Constants.NOTIF_TEST_ID, notif)
     }
 
+    /**
+     * "A new version is available — tap to update". Tapping opens MainActivity (Home), which
+     * re-checks and surfaces the update dialog. Uses the general channel (created in [createChannels]).
+     */
+    fun postUpdateNotification(versionName: String) {
+        val title = context.getString(R.string.notif_update_title)
+        val body = context.getString(R.string.notif_update_text, versionName)
+        val notif = NotificationCompat.Builder(context, Constants.CHANNEL_GENERAL_ID)
+            .setSmallIcon(R.drawable.ic_azan_notification)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(mainActivityIntent())
+            .build()
+        safeNotify(Constants.NOTIF_UPDATE_ID, notif)
+    }
+
     private fun mainActivityIntent(): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
