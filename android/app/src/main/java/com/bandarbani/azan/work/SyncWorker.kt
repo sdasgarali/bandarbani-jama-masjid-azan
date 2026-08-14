@@ -84,15 +84,20 @@ class SyncWorker @AssistedInject constructor(
             )
         }
 
-        /** Daily safety-net sync in case an FCM push was missed. */
+        /**
+         * Safety-net sync 6 times a day (every 4 hours) in case an FCM push was missed.
+         * WorkManager batches this with system maintenance windows / Doze, so exact spacing
+         * varies slightly, but it targets ~6 runs/day. UPDATE policy re-applies the interval
+         * to existing installs after an app update (not just fresh installs).
+         */
         fun enqueuePeriodic(context: Context) {
-            val request = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.DAYS)
+            val request = PeriodicWorkRequestBuilder<SyncWorker>(4, TimeUnit.HOURS)
                 .setConstraints(networkConstraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 Constants.WORK_SYNC_PERIODIC,
-                ExistingPeriodicWorkPolicy.KEEP,
+                ExistingPeriodicWorkPolicy.UPDATE,
                 request,
             )
         }
