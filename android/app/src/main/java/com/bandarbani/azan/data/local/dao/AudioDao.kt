@@ -4,40 +4,33 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Transaction
 import com.bandarbani.azan.data.local.entity.AudioMetaEntity
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AudioDao {
 
-    @Query("SELECT * FROM audio_meta WHERE isActive = 1 LIMIT 1")
-    suspend fun getActive(): AudioMetaEntity?
-
-    @Query("SELECT * FROM audio_meta WHERE isActive = 1 LIMIT 1")
-    fun observeActive(): Flow<AudioMetaEntity?>
-
     @Query("SELECT * FROM audio_meta WHERE version = :version LIMIT 1")
     suspend fun getByVersion(version: Int): AudioMetaEntity?
+
+    @Query("SELECT * FROM audio_meta WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): AudioMetaEntity?
 
     @Query("SELECT * FROM audio_meta")
     suspend fun getAll(): List<AudioMetaEntity>
 
+    /** Any validated (playable) audio — used as a last-resort fallback (e.g. TEST_AZAN). */
+    @Query("SELECT * FROM audio_meta WHERE validated = 1 AND localPath IS NOT NULL ORDER BY version DESC LIMIT 1")
+    suspend fun getAnyValidated(): AudioMetaEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(meta: AudioMetaEntity)
 
-    @Query("UPDATE audio_meta SET isActive = 0")
-    suspend fun clearActiveFlags()
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(metas: List<AudioMetaEntity>)
+
+    @Query("UPDATE audio_meta SET localPath = :localPath, validated = 1, updatedAt = :updatedAt WHERE version = :version")
+    suspend fun markValidated(version: Int, localPath: String, updatedAt: Long)
 
     @Query("DELETE FROM audio_meta WHERE version = :version")
     suspend fun deleteByVersion(version: Int)
-
-    /**
-     * Promote [version] to the active audio (exactly one active row) after its file is verified.
-     */
-    @Transaction
-    suspend fun promoteActive(meta: AudioMetaEntity) {
-        clearActiveFlags()
-        upsert(meta.copy(isActive = true))
-    }
 }

@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
   { href: "/schedule", label: "Schedule", icon: "🕐" },
   { href: "/audio", label: "Azan Audio", icon: "🔊" },
+  { href: "/announcements", label: "Announcements", icon: "📢" },
   { href: "/devices", label: "Devices", icon: "📱" },
   { href: "/versions", label: "App Versions", icon: "🏷️" },
   { href: "/updates", label: "App Updates", icon: "⬆️" },

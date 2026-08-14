@@ -35,6 +35,7 @@ model Admin {
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
   appReleases   AppRelease[]
+  announcements Announcement[]
 
   @@map("admins")
 }
@@ -58,6 +59,8 @@ model PrayerSchedule {
   timezone       String
   currentVersion Int      @default(0)
   isPublished    Boolean  @default(false)
+  defaultAudioId String?  @db.ObjectId // fallback Azan when a prayer has no custom audio
+  defaultAudio   AzanAudio? @relation("DefaultAudio", fields: [defaultAudioId], references: [id])
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -76,6 +79,8 @@ model PrayerTime {
   enabled             Boolean        @default(true)
   audioEnabled        Boolean        @default(true)
   notificationEnabled Boolean        @default(true)
+  audioId             String?        @db.ObjectId // this prayer's custom Azan; null ⇒ schedule.defaultAudioId
+  audio               AzanAudio?     @relation(fields: [audioId], references: [id])
 
   @@unique([scheduleId, prayer])
   @@index([scheduleId])
@@ -99,6 +104,8 @@ model ScheduleVersion {
 
 model AzanAudio {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  label          String?
+  kind           String   @default("AZAN") // "AZAN" | "ANNOUNCEMENT"
   filename       String
   storedName     String
   mimeType       String
@@ -110,8 +117,30 @@ model AzanAudio {
   uploadedById   String?  @db.ObjectId
   createdAt      DateTime @default(now())
 
+  // Back-relations required by Prisma (MongoDB) for the FKs that reference this model.
+  prayerTimes         PrayerTime[]
+  defaultForSchedules PrayerSchedule[] @relation("DefaultAudio")
+  announcements       Announcement[]
+
   @@index([isActive])
+  @@index([kind])
   @@map("azan_audio")
+}
+
+model Announcement {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  label       String?
+  scheduledAt DateTime // absolute instant (UTC) at which the app plays the audio once
+  enabled     Boolean  @default(true)
+  audioId     String   @db.ObjectId
+  audio       AzanAudio @relation(fields: [audioId], references: [id])
+  createdById String?  @db.ObjectId
+  createdBy   Admin?   @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([scheduledAt])
+  @@index([enabled])
+  @@map("announcements")
 }
 
 model AppRelease {

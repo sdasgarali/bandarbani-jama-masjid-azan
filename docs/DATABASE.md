@@ -45,19 +45,31 @@ so there are no SQL migrations — `db push` syncs indexes/constraints). All tim
 
 ### PrayerSchedule
 `id, name, timezone (IANA, e.g. "Asia/Dhaka"), currentVersion (int), isPublished (bool),
+ defaultAudioId (ObjectId? → AzanAudio — the fallback Azan when a prayer has no custom audio),
  createdAt, updatedAt`
 
 ### PrayerTime
 `id, scheduleId, prayer (enum), time (string "HH:mm" 24h), enabled (bool),
- audioEnabled (bool), notificationEnabled (bool)` — unique (scheduleId, prayer)
+ audioEnabled (bool), notificationEnabled (bool),
+ audioId (ObjectId? → AzanAudio — this prayer's custom Azan; null ⇒ schedule.defaultAudioId)`
+ — unique (scheduleId, prayer)
 
 ### ScheduleVersion
 `id, scheduleId, version (int), timezone, payload (Json — the frozen times+toggles+audio ref),
  publishedById, publishedAt` — unique (scheduleId, version)
 
-### AzanAudio
-`id, filename, storedName, mimeType, sizeBytes, checksumSha256, version (int),
- durationMs (nullable), isActive (bool), uploadedById, createdAt`
+### AzanAudio  (general audio library — Azan clips AND announcement recordings)
+`id, label (String?), kind (String @default "AZAN" — "AZAN" | "ANNOUNCEMENT"),
+ filename, storedName, mimeType, sizeBytes, checksumSha256, version (int, unique — used by
+ GET /audio/:version/file), durationMs (nullable), isActive (bool — legacy/global-default flag),
+ uploadedById, createdAt`
+ — Uploading adds a row to the library; it no longer deactivates the others. Prayers and
+   announcements reference a specific audio by `audioId`.
+
+### Announcement  (admin-scheduled one-off audio broadcast)
+`id (ObjectId), label (String?), scheduledAt (DateTime, absolute instant, UTC), enabled (Bool
+ @default true), audioId (ObjectId → AzanAudio), createdById (ObjectId?), createdAt`
+ — the app schedules an exact alarm at `scheduledAt` and plays the referenced audio once.
 
 ### Device
 `id (ObjectId), deviceId (uuid, unique, app-generated), deviceSecretHash, platform ("android"),
@@ -81,22 +93,35 @@ so there are no SQL migrations — `db push` syncs indexes/constraints). All tim
  metadata (Json), ip (nullable), createdAt`
 
 ## Published payload shape (ScheduleVersion.payload)
+Returned by `GET /api/v1/schedule/current` and parsed by the Android app. Each prayer carries its
+own `audioId`; `audios[]` is the deduped list of every audio the app must download & cache;
+`announcements[]` are future scheduled broadcasts. `audio.path` is **relative** — the app builds
+the absolute URL from its own API base (`API_BASE_URL + path`).
+
 ```json
 {
-  "version": 7,
+  "version": 8,
   "timezone": "Asia/Dhaka",
+  "defaultAudioId": "a1",
   "prayers": [
-    {"prayer":"FAJR","time":"04:18","enabled":true,"audioEnabled":true,"notificationEnabled":true},
-    {"prayer":"DHUHR","time":"12:05","enabled":true,"audioEnabled":true,"notificationEnabled":true},
-    {"prayer":"ASR","time":"16:38","enabled":true,"audioEnabled":true,"notificationEnabled":true},
-    {"prayer":"MAGHRIB","time":"18:21","enabled":true,"audioEnabled":true,"notificationEnabled":true},
-    {"prayer":"ISHA","time":"19:42","enabled":true,"audioEnabled":true,"notificationEnabled":true}
+    {"prayer":"FAJR","time":"04:18","enabled":true,"audioEnabled":true,"notificationEnabled":true,"audioId":"a2"},
+    {"prayer":"DHUHR","time":"12:05","enabled":true,"audioEnabled":true,"notificationEnabled":true,"audioId":null},
+    {"prayer":"ASR","time":"16:38","enabled":true,"audioEnabled":true,"notificationEnabled":true,"audioId":null},
+    {"prayer":"MAGHRIB","time":"18:21","enabled":true,"audioEnabled":true,"notificationEnabled":true,"audioId":"a2"},
+    {"prayer":"ISHA","time":"19:42","enabled":true,"audioEnabled":true,"notificationEnabled":true,"audioId":null}
   ],
-  "audio": {
-    "id":"...", "version":3, "url":"/api/v1/audio/3/file",
-    "checksumSha256":"...", "sizeBytes":123456, "mimeType":"audio/mpeg"
-  },
+  "audios": [
+    {"id":"a1","label":"Default Azan","version":3,"path":"audio/3/file","checksumSha256":"...","sizeBytes":123456,"mimeType":"audio/mpeg"},
+    {"id":"a2","label":"Makkah Azan","version":5,"path":"audio/5/file","checksumSha256":"...","sizeBytes":222333,"mimeType":"audio/mpeg"}
+  ],
+  "announcements": [
+    {"id":"n1","label":"Eid Jama'at notice","scheduledAt":"2026-08-20T03:00:00.000Z","enabled":true,
+     "audio":{"id":"a9","label":"Eid notice","version":7,"path":"audio/7/file","checksumSha256":"...","sizeBytes":98765,"mimeType":"audio/mpeg"}}
+  ],
   "publishedAt":"2026-08-14T09:00:00.000Z"
 }
 ```
-This exact shape is what `GET /api/v1/schedule/current` returns and what the Android app parses.
+Resolution rule for a prayer's Azan: use `prayer.audioId` → else `defaultAudioId` → else no audio
+(notification only). `audios[]` always contains every audio referenced by a prayer or the default.
+Announcements reference their own audio inline. `defaultAudioId`/`audioId` may be `null` if the
+admin hasn't assigned audio yet.

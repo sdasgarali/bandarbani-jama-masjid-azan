@@ -1,47 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { prisma } from '../config/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { ok } from '../utils/respond.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { writeAudit } from '../services/audit.js';
 import { buildAudioRef } from '../services/schedule.js';
+import { createAudioFromFile } from '../services/audioLibrary.js';
+import { audioUploadSchema } from '../validators/schemas.js';
 import { uploadDir } from '../config/paths.js';
 
-function sha256File(filePath) {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
-    const stream = fs.createReadStream(filePath);
-    stream.on('error', reject);
-    stream.on('data', (chunk) => hash.update(chunk));
-    stream.on('end', () => resolve(hash.digest('hex')));
-  });
-}
-
-// POST /audio — multipart 'file'. multer already validated mime+size.
+// POST /audio — multipart 'file' (+ optional label, kind). multer validated mime+size.
+// Adds a row to the library; does NOT deactivate other audios (library semantics).
 export const uploadAudio = asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError('FILE_INVALID', 'No file uploaded (field "file")');
 
-  const checksum = await sha256File(req.file.path);
+  // Multipart body fields arrive as strings — validate + coerce here (after multer).
+  const parsed = audioUploadSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    throw new AppError('VALIDATION', 'Validation failed', parsed.error.flatten());
+  }
+  const { label, kind } = parsed.data;
 
-  const latest = await prisma.azanAudio.findFirst({ orderBy: { version: 'desc' } });
-  const nextVersion = (latest?.version ?? 0) + 1;
-
-  // Deactivate previous active audio.
-  await prisma.azanAudio.updateMany({ where: { isActive: true }, data: { isActive: false } });
-
-  const audio = await prisma.azanAudio.create({
-    data: {
-      filename: req.file.originalname,
-      storedName: req.file.filename,
-      mimeType: req.file.mimetype,
-      sizeBytes: req.file.size,
-      checksumSha256: checksum,
-      version: nextVersion,
-      isActive: true,
-      uploadedById: req.admin.id,
-    },
+  const audio = await createAudioFromFile(req.file, {
+    label,
+    kind,
+    uploadedById: req.admin.id,
   });
 
   await writeAudit({
@@ -49,27 +33,29 @@ export const uploadAudio = asyncHandler(async (req, res) => {
     action: 'AUDIO_UPLOAD',
     entity: 'AzanAudio',
     entityId: audio.id,
-    metadata: { version: nextVersion, checksum, sizeBytes: audio.sizeBytes },
+    metadata: {
+      version: audio.version,
+      kind: audio.kind,
+      checksum: audio.checksumSha256,
+      sizeBytes: audio.sizeBytes,
+    },
     ip: req.ip,
   });
 
   return ok(res, buildAudioRef(audio), 201);
 });
 
-// GET /audio — list metadata.
+// GET /audio — list the audio library.
 export const listAudio = asyncHandler(async (_req, res) => {
   const items = await prisma.azanAudio.findMany({ orderBy: { version: 'desc' } });
   return ok(res, {
     audio: items.map((a) => ({
       id: a.id,
+      label: a.label ?? null,
+      kind: a.kind,
       version: a.version,
-      filename: a.filename,
-      mimeType: a.mimeType,
       sizeBytes: a.sizeBytes,
       checksumSha256: a.checksumSha256,
-      durationMs: a.durationMs,
-      isActive: a.isActive,
-      url: `/api/v1/audio/${a.version}/file`,
       createdAt: a.createdAt,
     })),
   });

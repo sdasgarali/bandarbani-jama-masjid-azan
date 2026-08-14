@@ -16,6 +16,8 @@ data class ScheduleEntity(
     val timezone: String,
     /** ISO-8601 instant string from the payload's publishedAt. */
     val publishedAt: String,
+    /** Fallback Azan audio id for prayers without a custom audioId. Null ⇒ no default assigned. */
+    val defaultAudioId: String? = null,
     /** When this device last successfully applied this schedule (epoch millis). */
     val updatedAt: Long,
 ) {

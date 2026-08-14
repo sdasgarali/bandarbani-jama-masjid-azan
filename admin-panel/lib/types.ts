@@ -25,6 +25,8 @@ export interface PrayerTime {
   enabled: boolean;
   audioEnabled: boolean;
   notificationEnabled: boolean;
+  // This prayer's custom Azan audio; null ⇒ fall back to schedule.defaultAudioId.
+  audioId?: string | null;
 }
 
 export interface Schedule {
@@ -34,6 +36,8 @@ export interface Schedule {
   currentVersion: number;
   isPublished: boolean;
   prayers: PrayerTime[];
+  // Fallback Azan audio when a prayer has no custom audio; null ⇒ notification only.
+  defaultAudioId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -47,8 +51,12 @@ export interface ScheduleVersion {
   payload?: unknown;
 }
 
+export type AudioKind = "AZAN" | "ANNOUNCEMENT";
+
 export interface AzanAudio {
   id: string;
+  label?: string | null;
+  kind?: AudioKind;
   filename: string;
   storedName?: string;
   mimeType: string;
@@ -59,6 +67,27 @@ export interface AzanAudio {
   isActive: boolean;
   uploadedById?: string;
   createdAt: string;
+}
+
+// Resolved audio meta as embedded in an Announcement (published payload shape).
+export interface AnnouncementAudio {
+  id?: string;
+  label?: string | null;
+  version: number;
+  path?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  checksumSha256?: string;
+}
+
+export interface Announcement {
+  id: string;
+  label?: string | null;
+  scheduledAt: string; // ISO 8601 instant (UTC)
+  enabled: boolean;
+  audioId?: string;
+  audio: AnnouncementAudio;
+  createdAt?: string;
 }
 
 export interface AppRelease {

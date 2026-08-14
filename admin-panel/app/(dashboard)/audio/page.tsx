@@ -31,6 +31,7 @@ export default function AudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [label, setLabel] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,11 +84,15 @@ export default function AudioPage() {
     if (!selectedFile) return;
     setUploading(true);
     try {
-      const created = await uploadAudio(selectedFile);
+      const created = await uploadAudio(selectedFile, {
+        label: label.trim() || undefined,
+        kind: "AZAN",
+      });
       toast.success(
-        `Uploaded "${created.filename}" as audio v${created.version} (now active).`
+        `Uploaded "${created.label || created.filename}" as audio v${created.version}.`
       );
       setSelectedFile(null);
+      setLabel("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       await load();
     } catch (e) {
@@ -121,39 +126,61 @@ export default function AudioPage() {
       {/* Upload */}
       <Card className="mb-6">
         <CardHeader
-          title="Upload / replace audio"
-          description={`MP3 only · max ${MAX_MB} MB. Uploading sets the new file active.`}
+          title="Add audio to the library"
+          description={`MP3 only · max ${MAX_MB} MB. Uploading adds a clip to the library — assign it to prayers on the Schedule page.`}
         />
-        <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus-within:ring-2 focus-within:ring-brand-500">
-            <span aria-hidden>📁</span>
-            Choose MP3
+        <div className="space-y-4 px-5 py-4">
+          <div>
+            <label
+              htmlFor="audio-label"
+              className="mb-1.5 block text-sm font-medium text-slate-700"
+            >
+              Name{" "}
+              <span className="font-normal text-slate-400">(optional)</span>
+            </label>
             <input
-              ref={fileInputRef}
-              type="file"
-              accept="audio/mpeg,.mp3"
-              onChange={onPick}
-              className="sr-only"
+              id="audio-label"
+              type="text"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="e.g. Makkah Azan"
+              className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 sm:max-w-sm"
             />
-          </label>
-          {selectedFile ? (
-            <span className="text-sm text-slate-600">
-              {selectedFile.name}{" "}
-              <span className="text-slate-400">
-                ({formatBytes(selectedFile.size)})
+            <p className="mt-1 text-xs text-slate-400">
+              A friendly label to recognise this clip in the library.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus-within:ring-2 focus-within:ring-brand-500">
+              <span aria-hidden>📁</span>
+              Choose MP3
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/mpeg,.mp3"
+                onChange={onPick}
+                className="sr-only"
+              />
+            </label>
+            {selectedFile ? (
+              <span className="text-sm text-slate-600">
+                {selectedFile.name}{" "}
+                <span className="text-slate-400">
+                  ({formatBytes(selectedFile.size)})
+                </span>
               </span>
-            </span>
-          ) : (
-            <span className="text-sm text-slate-400">No file selected</span>
-          )}
-          <Button
-            onClick={doUpload}
-            loading={uploading}
-            disabled={!selectedFile}
-            className="ml-auto"
-          >
-            {uploading ? "Uploading" : "Upload"}
-          </Button>
+            ) : (
+              <span className="text-sm text-slate-400">No file selected</span>
+            )}
+            <Button
+              onClick={doUpload}
+              loading={uploading}
+              disabled={!selectedFile}
+              className="ml-auto"
+            >
+              {uploading ? "Uploading" : "Upload"}
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -167,14 +194,18 @@ export default function AudioPage() {
           <Card className="mb-6">
             <CardHeader
               title="Active audio"
-              description="Currently served to all devices"
+              description="Marked active in the library"
               action={active ? <Badge tone="success">Active</Badge> : undefined}
             />
             {active ? (
               <div className="space-y-4 px-5 py-4">
                 <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
                   <Meta label="Version" value={`v${active.version}`} />
-                  <Meta label="Filename" value={active.filename} />
+                  <Meta
+                    label="Name"
+                    value={active.label || active.filename}
+                  />
+                  <Meta label="Kind" value={active.kind || "AZAN"} />
                   <Meta label="Size" value={formatBytes(active.sizeBytes)} />
                   <Meta
                     label="Uploaded"
@@ -211,17 +242,17 @@ export default function AudioPage() {
             )}
           </Card>
 
-          {/* Previous versions */}
+          {/* Audio library */}
           <Card>
             <CardHeader
-              title="Previous versions"
-              description={`${previous.length} archived recording${previous.length === 1 ? "" : "s"}`}
+              title="Audio library"
+              description={`${previous.length} other clip${previous.length === 1 ? "" : "s"} · Azan clips & announcement recordings`}
             />
             {previous.length === 0 ? (
               <EmptyState
                 icon="🗂️"
-                title="No previous versions"
-                description="Older recordings will appear here after you upload a replacement."
+                title="No other clips"
+                description="Uploaded clips will appear here. Assign them to prayers on the Schedule page."
               />
             ) : (
               <div className="overflow-x-auto">
@@ -229,7 +260,8 @@ export default function AudioPage() {
                   <thead>
                     <tr className="text-left text-xs font-medium uppercase tracking-wide text-slate-400">
                       <th className="px-5 py-3">Version</th>
-                      <th className="px-5 py-3">Filename</th>
+                      <th className="px-5 py-3">Name</th>
+                      <th className="px-5 py-3">Kind</th>
                       <th className="px-5 py-3">Size</th>
                       <th className="px-5 py-3">Uploaded</th>
                       <th className="px-5 py-3">Preview</th>
@@ -242,7 +274,14 @@ export default function AudioPage() {
                           <Badge tone="neutral">v{a.version}</Badge>
                         </td>
                         <td className="px-5 py-3 text-slate-700">
-                          {a.filename}
+                          {a.label || a.filename}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge
+                            tone={a.kind === "ANNOUNCEMENT" ? "gold" : "brand"}
+                          >
+                            {a.kind || "AZAN"}
+                          </Badge>
                         </td>
                         <td className="px-5 py-3 text-slate-500">
                           {formatBytes(a.sizeBytes)}

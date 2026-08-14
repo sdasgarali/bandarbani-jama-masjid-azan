@@ -35,6 +35,12 @@ data class HomeUiState(
     val hasSchedule: Boolean = false,
 )
 
+/** Minimal UI model for the "next upcoming announcement" chip on Home. */
+data class NextAnnouncementUi(
+    val label: String,
+    val scheduledAtEpochMillis: Long,
+)
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: AzanRepository,
@@ -89,6 +95,27 @@ class HomeViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = HomeUiState(),
+        )
+
+    /**
+     * The soonest enabled announcement still in the future, or null. Combines the announcement list
+     * with the 1Hz ticker so a past announcement drops off the chip without a manual refresh.
+     */
+    val nextAnnouncement: StateFlow<NextAnnouncementUi?> =
+        combine(repository.observeEnabledAnnouncements(), ticker) { announcements, now ->
+            announcements
+                .filter { it.scheduledAtEpochMillis > now.toEpochMilli() }
+                .minByOrNull { it.scheduledAtEpochMillis }
+                ?.let {
+                    NextAnnouncementUi(
+                        label = it.label?.takeIf(String::isNotBlank) ?: "Announcement",
+                        scheduledAtEpochMillis = it.scheduledAtEpochMillis,
+                    )
+                }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null,
         )
 
     // ---- In-app auto-update ----

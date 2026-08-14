@@ -3,6 +3,7 @@ package com.bandarbani.azan.di
 import android.content.Context
 import androidx.room.Room
 import com.bandarbani.azan.data.local.AppDatabase
+import com.bandarbani.azan.data.local.dao.AnnouncementDao
 import com.bandarbani.azan.data.local.dao.AudioDao
 import com.bandarbani.azan.data.local.dao.ScheduleDao
 import com.bandarbani.azan.data.local.dao.SyncStateDao
@@ -33,6 +34,9 @@ object AppModule {
 
     @Provides
     fun provideSyncStateDao(db: AppDatabase): SyncStateDao = db.syncStateDao()
+
+    @Provides
+    fun provideAnnouncementDao(db: AppDatabase): AnnouncementDao = db.announcementDao()
 
     @Provides
     @Singleton

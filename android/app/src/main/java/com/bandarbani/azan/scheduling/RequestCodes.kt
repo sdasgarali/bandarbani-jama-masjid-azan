@@ -30,4 +30,25 @@ object RequestCodes {
         val dayBucket = Math.floorMod(epochDay, DAY_SPAN.toLong()).toInt()
         return base + dayBucket * PRAYER_COUNT + prayerOrdinal
     }
+
+    /**
+     * Deterministic, distinct request code for a scheduled announcement, in a SEPARATE numeric range
+     * from prayers so the two can never collide. The code is a stable function of the announcement's
+     * identity (id + audioVersion + fire instant): re-running rescheduleAll with the same inputs
+     * yields the SAME code, so arming replaces (never duplicates) the alarm; two different
+     * announcements yield (with overwhelming probability) different codes.
+     *
+     * [base] must be far above the prayer space [prayerBase, prayerBase+9] — see
+     * Constants.ANNOUNCEMENT_REQUEST_BASE.
+     */
+    private const val ANNOUNCEMENT_SPAN = 100_000
+
+    fun announcement(id: String, audioVersion: Int, epochMillis: Long, base: Int): Int {
+        var h = 17
+        h = 31 * h + id.hashCode()
+        h = 31 * h + audioVersion
+        h = 31 * h + (epochMillis xor (epochMillis ushr 32)).toInt()
+        val offset = Math.floorMod(h, ANNOUNCEMENT_SPAN)
+        return base + offset
+    }
 }

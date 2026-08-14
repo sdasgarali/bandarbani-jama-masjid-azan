@@ -53,4 +53,33 @@ class RequestCodesTest {
         val byEpoch = RequestCodes.forEpochDay(Prayer.ASR.ordinal, date.toEpochDay(), base)
         assertThat(byDate).isEqualTo(byEpoch)
     }
+
+    private val annBase = Constants.ANNOUNCEMENT_REQUEST_BASE
+
+    @Test
+    fun `announcement code is deterministic for same inputs`() {
+        val a = RequestCodes.announcement("n1", 7, 1_760_000_000_000L, annBase)
+        val b = RequestCodes.announcement("n1", 7, 1_760_000_000_000L, annBase)
+        assertThat(a).isEqualTo(b)
+    }
+
+    @Test
+    fun `different announcements get distinct codes`() {
+        val a = RequestCodes.announcement("n1", 7, 1_760_000_000_000L, annBase)
+        val b = RequestCodes.announcement("n2", 7, 1_760_000_000_000L, annBase)
+        val c = RequestCodes.announcement("n1", 8, 1_760_000_000_000L, annBase)
+        val d = RequestCodes.announcement("n1", 7, 1_760_000_000_001L, annBase)
+        assertThat(setOf(a, b, c, d)).hasSize(4)
+    }
+
+    @Test
+    fun `announcement codes never collide with the prayer code space`() {
+        // Prayer space is [base, base+9]. Announcement space starts far above and stays above it.
+        val prayerMax = base + 9
+        for (i in 0 until 500) {
+            val code = RequestCodes.announcement("id$i", i % 20, 1_700_000_000_000L + i, annBase)
+            assertThat(code).isAtLeast(annBase)
+            assertThat(code).isGreaterThan(prayerMax)
+        }
+    }
 }

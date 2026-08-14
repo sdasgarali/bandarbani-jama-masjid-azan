@@ -67,6 +67,19 @@ On alarm fire (`AzanAlarmReceiver`):
   cancels old alarms, arms new. If offline, worker retries; existing local alarms stay armed.
 - App is fully functional offline once synced at least once.
 
+## 6b. Per-prayer custom audio & scheduled announcements
+- **Per-prayer Azan:** the payload gives each prayer an `audioId` and a global `defaultAudioId`,
+  plus an `audios[]` library. The `AudioSyncWorker` downloads & caches **every** audio in
+  `audios[]` (each verified by sha256, cached as `azan_v<version>.mp3`, old kept until new validates).
+  At prayer fire the receiver resolves `prayer.audioId → defaultAudioId → none` to the cached file
+  and plays it.
+- **Announcements:** the payload's `announcements[]` are one-off broadcasts with an absolute
+  `scheduledAt` instant and their own audio. The scheduler arms an exact `setAlarmClock` for each
+  future announcement (distinct, deterministic request codes so they don't collide with prayer
+  alarms or duplicate). On fire, the app plays the announcement audio once (no re-arm). Past
+  announcements are ignored. Announcement audio is cached the same safe way as Azan audio.
+- Reboot / time-change / daily-tick rearm announcements alongside prayers.
+
 ## 7. What we deliberately avoid
 - No always-on background service polling the clock.
 - No network call at prayer time.

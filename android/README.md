@@ -244,6 +244,41 @@ See `../docs/ANDROID_SCHEDULING.md`, `../docs/API.md`, `../docs/DATABASE.md`, `.
 
 ---
 
+## 6b. Per-prayer audio & scheduled announcements
+
+The published payload (`GET /schedule/current`, shape in `../docs/DATABASE.md`) carries an audio
+**library** plus optional **announcements**. The app models both:
+
+- **Per-prayer Azan.** Each prayer has an optional `audioId`; the schedule has a global
+  `defaultAudioId`. Resolution at fire time is `prayer.audioId → defaultAudioId → none`
+  (`AzanRepository.resolvePrayerAudio`). `AudioSyncWorker` downloads & caches **every** audio in
+  `audios[]` (and every announcement audio), one row per version in the `audio_meta` table, each
+  verified by sha256 + size and cached as `filesDir/azan/azan_v<version>.mp3`. A row only becomes
+  playable (`validated = true`) after verification; an old file is kept until the new one validates,
+  and orphaned files (no longer referenced by any version) are pruned. Audio download URLs are built
+  from `BuildConfig.API_BASE_URL + audio.path` (the payload `path` is relative).
+- **Announcements.** `announcements[]` are one-off broadcasts with an absolute ISO `scheduledAt`
+  (parsed to epoch millis) and their own inline audio. `AlarmScheduler.rescheduleAll()` arms an exact
+  `setAlarmClock` for each **enabled, future** announcement using a deterministic request code in a
+  **separate numeric range** from prayers (`RequestCodes.announcement`, base
+  `ANNOUNCEMENT_REQUEST_BASE`) so the two never collide or duplicate. On fire, `AzanAlarmReceiver`
+  (discriminating `EXTRA_TYPE = PRAYER|ANNOUNCEMENT`) plays the cached announcement audio **once** and
+  posts a notification titled from the announcement label — no re-arm. Prayer fires still self-heal by
+  re-arming, which also re-arms announcements; reboot / time-change / daily tick do the same.
+
+Room is at **version 2** (per-prayer `audioId`, schedule `defaultAudioId`, version-keyed audio
+library with a `validated` flag, and the new `announcement` table). It is a pure cache, so it uses
+`fallbackToDestructiveMigration` — a re-sync repopulates everything. Home shows an "Upcoming
+announcement" chip when one is pending.
+
+Key code: `data/remote/dto/ScheduleDto.kt` (`AudioDto`, `AnnouncementDto`, per-prayer `audioId`,
+`defaultAudioId`), `data/local/entity/{AudioMetaEntity,AnnouncementEntity,PrayerTimeEntity,ScheduleEntity}.kt`,
+`data/local/dao/{AudioDao,AnnouncementDao}.kt`, `data/repository/AzanRepository.kt`,
+`audio/AudioSyncWorker.kt`, `scheduling/{AlarmScheduler,RequestCodes}.kt`,
+`receiver/AzanAlarmReceiver.kt`.
+
+---
+
 ## 7. Tests
 
 JVM unit tests under `app/src/test/`:

@@ -92,14 +92,17 @@ export async function seedFixtures(prisma, { publish = false } = {}) {
     const payload = {
       version: 1,
       timezone: 'Asia/Dhaka',
+      defaultAudioId: null,
       prayers: Object.entries(times).map(([prayer, time]) => ({
         prayer,
         time,
         enabled: true,
         audioEnabled: true,
         notificationEnabled: true,
+        audioId: null,
       })),
-      audio: null,
+      audios: [],
+      announcements: [],
       publishedAt: new Date().toISOString(),
     };
     await prisma.scheduleVersion.create({

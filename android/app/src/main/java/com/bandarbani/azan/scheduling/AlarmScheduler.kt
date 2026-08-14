@@ -12,6 +12,7 @@ import com.bandarbani.azan.core.Prayer
 import com.bandarbani.azan.data.local.dao.ScheduleDao
 import com.bandarbani.azan.data.local.dao.SyncStateDao
 import com.bandarbani.azan.data.local.entity.SyncStateEntity
+import com.bandarbani.azan.data.repository.AzanRepository
 import com.bandarbani.azan.receiver.AzanAlarmReceiver
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.Instant
@@ -20,21 +21,26 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Arms exact alarms for upcoming prayers. IDEMPOTENT: because request codes are deterministic,
- * calling [rescheduleAll] repeatedly replaces existing PendingIntents rather than duplicating them.
+ * Arms exact alarms for upcoming prayers AND future announcements. IDEMPOTENT: because request codes
+ * are deterministic, calling [rescheduleAll] repeatedly replaces existing PendingIntents rather than
+ * duplicating them.
  *
- * Strategy (see ANDROID_SCHEDULING.md §3):
+ * Strategy (see ANDROID_SCHEDULING.md §3, §6b):
  *  1. Read schedule + timezone from Room.
- *  2. Cancel every previously-armed request code (tracked in SyncState).
- *  3. Compute next fire per enabled prayer; arm a rolling window of the soonest N.
- *  4. Use setAlarmClock (most Doze-resilient) with setExactAndAllowWhileIdle fallback.
- *  5. Persist the newly-armed request-code set.
+ *  2. Cancel every previously-armed request code (tracked in SyncState) — prayers AND announcements.
+ *  3. Compute next fire per enabled prayer; arm a rolling window of the soonest N, resolving each
+ *     prayer's audio (prayer.audioId → defaultAudioId) to a cached version so the receiver knows what
+ *     to play without a DB lookup at fire time.
+ *  4. For every ENABLED announcement whose instant is in the FUTURE, arm an exact alarm with a
+ *     deterministic, distinct request code (separate numeric range → never collides with prayers).
+ *  5. Persist the newly-armed request-code set (prayers + announcements) for clean cancellation.
  */
 @Singleton
 class AlarmScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
     private val scheduleDao: ScheduleDao,
     private val syncStateDao: SyncStateDao,
+    private val repository: AzanRepository,
 ) {
     private val alarmManager: AlarmManager =
         context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -57,34 +63,55 @@ class AlarmScheduler @Inject constructor(
         // 1) Cancel all previously-armed alarms (idempotent regardless of current schedule).
         cancelAll()
 
-        // 2) Compute next fires for enabled prayers.
-        val now = Instant.now()
-        val enabled = prayerTimes.filter { it.enabled }
-            .map { it.prayer to it.time }
-        val fires = AlarmTimeCalculator.nextFires(enabled, zone, now)
-        if (fires.isEmpty()) {
-            Log.i(TAG, "rescheduleAll: no enabled prayers to arm.")
-            persistArmed(emptySet())
-            return
-        }
-
-        // 3) Arm the soonest N.
         val armed = mutableSetOf<Int>()
-        fires.take(rollingWindow).forEach { fire ->
+        val now = Instant.now()
+
+        // 2) Prayers — arm the soonest N.
+        val enabled = prayerTimes.filter { it.enabled }.map { it.prayer to it.time }
+        val fires = AlarmTimeCalculator.nextFires(enabled, zone, now)
+        for (fire in fires.take(rollingWindow)) {
+            val setting = prayerTimes.firstOrNull { it.prayer == fire.prayer }
+            // Resolve this prayer's audio (prayer.audioId → defaultAudioId) to a cached version so the
+            // receiver plays the right clip with no DB race at fire time. -1 ⇒ notification only.
+            val audioVersion = repository
+                .resolvePrayerAudio(setting?.audioId, schedule.defaultAudioId)
+                ?.takeIf { it.validated && it.localPath != null }
+                ?.version ?: -1
             val requestCode = RequestCodes.forPrayerOnDate(
                 fire.prayer, fire.localDate, Constants.ALARM_REQUEST_BASE,
             )
-            val pi = buildPendingIntent(
+            val pi = buildPrayerPendingIntent(
                 requestCode = requestCode,
                 prayer = fire.prayer,
                 scheduleVersion = schedule.version,
                 epochDay = fire.localDate.toEpochDay(),
+                audioVersion = audioVersion,
             )
             armExact(fire.instant.toEpochMilli(), pi)
             armed += requestCode
             Log.i(
                 TAG,
-                "Armed ${fire.prayer} at ${fire.instant} (code=$requestCode, v=${schedule.version})",
+                "Armed prayer ${fire.prayer} at ${fire.instant} (code=$requestCode, v=${schedule.version}, audioV=$audioVersion)",
+            )
+        }
+
+        // 3) Announcements — arm every enabled future one.
+        val announcements = repository.getEnabledFutureAnnouncements(now.toEpochMilli())
+        for (ann in announcements) {
+            val requestCode = RequestCodes.announcement(
+                ann.id, ann.audioVersion, ann.scheduledAtEpochMillis, Constants.ANNOUNCEMENT_REQUEST_BASE,
+            )
+            val pi = buildAnnouncementPendingIntent(
+                requestCode = requestCode,
+                announcementId = ann.id,
+                label = ann.label,
+                audioVersion = ann.audioVersion,
+            )
+            armExact(ann.scheduledAtEpochMillis, pi)
+            armed += requestCode
+            Log.i(
+                TAG,
+                "Armed announcement ${ann.id} at ${ann.scheduledAtEpochMillis} (code=$requestCode, audioV=${ann.audioVersion})",
             )
         }
 
@@ -92,7 +119,7 @@ class AlarmScheduler @Inject constructor(
         persistArmed(armed)
     }
 
-    /** Cancel every request code we previously armed (read from SyncState CSV). */
+    /** Cancel every request code we previously armed (read from SyncState CSV) + defensive sweep. */
     suspend fun cancelAll() {
         val state = syncStateDao.get()
         val codes = state?.armedRequestCodes
@@ -100,12 +127,14 @@ class AlarmScheduler @Inject constructor(
             ?.mapNotNull { it.trim().toIntOrNull() }
             ?: emptyList()
         codes.forEach { code ->
-            val pi = existingPendingIntent(code) ?: return@forEach
-            alarmManager.cancel(pi)
-            pi.cancel()
+            existingPendingIntent(code)?.let {
+                alarmManager.cancel(it)
+                it.cancel()
+            }
         }
-        // Also defensively cancel the full deterministic key-space for both day buckets, in case a
-        // prior state record was lost (e.g. cleared data) but an OS alarm survived.
+        // Defensively cancel the full deterministic PRAYER key-space for both day buckets, in case a
+        // prior state record was lost (e.g. cleared data) but an OS alarm survived. Announcement codes
+        // are content-derived (not enumerable), so they rely on the tracked CSV above.
         for (bucket in 0 until 2) {
             for (ordinal in Prayer.entries.indices) {
                 val code = Constants.ALARM_REQUEST_BASE + bucket * 5 + ordinal
@@ -119,15 +148,12 @@ class AlarmScheduler @Inject constructor(
 
     @SuppressLint("MissingPermission")
     private fun armExact(triggerAtMillis: Long, pi: PendingIntent) {
-        // On API 31+ exact alarms may be disallowed; guard and fall back to allow-while-idle,
-        // which still fires (may be slightly delayed) so the user is never left without an azan.
         val canExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             alarmManager.canScheduleExactAlarms()
         } else {
             true
         }
         if (canExact) {
-            // setAlarmClock is the most Doze-resilient and is user-visible in the status bar.
             val showIntent = PendingIntent.getActivity(
                 context,
                 0,
@@ -143,17 +169,36 @@ class AlarmScheduler @Inject constructor(
         }
     }
 
-    private fun buildPendingIntent(
+    private fun buildPrayerPendingIntent(
         requestCode: Int,
         prayer: Prayer,
         scheduleVersion: Int,
         epochDay: Long,
+        audioVersion: Int,
     ): PendingIntent {
         val intent = Intent(context, AzanAlarmReceiver::class.java).apply {
             action = ACTION_FIRE
+            putExtra(Constants.EXTRA_TYPE, Constants.TYPE_PRAYER)
             putExtra(Constants.EXTRA_PRAYER, prayer.name)
             putExtra(Constants.EXTRA_SCHEDULE_VERSION, scheduleVersion)
             putExtra(Constants.EXTRA_EPOCH_DAY, epochDay)
+            putExtra(Constants.EXTRA_AUDIO_VERSION, audioVersion)
+        }
+        return PendingIntent.getBroadcast(context, requestCode, intent, pendingIntentFlags())
+    }
+
+    private fun buildAnnouncementPendingIntent(
+        requestCode: Int,
+        announcementId: String,
+        label: String?,
+        audioVersion: Int,
+    ): PendingIntent {
+        val intent = Intent(context, AzanAlarmReceiver::class.java).apply {
+            action = ACTION_FIRE
+            putExtra(Constants.EXTRA_TYPE, Constants.TYPE_ANNOUNCEMENT)
+            putExtra(Constants.EXTRA_ANNOUNCEMENT_ID, announcementId)
+            putExtra(Constants.EXTRA_ANNOUNCEMENT_LABEL, label)
+            putExtra(Constants.EXTRA_AUDIO_VERSION, audioVersion)
         }
         return PendingIntent.getBroadcast(context, requestCode, intent, pendingIntentFlags())
     }

@@ -18,9 +18,9 @@ Access token TTL ~15m, refresh ~30d, rotated on use. Passwords bcrypt-hashed.
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | GET  | `/schedule` | — | current draft schedule + prayer times |
-| PUT  | `/schedule` | `{timezone, name?}` | update schedule meta |
-| PUT  | `/schedule/prayers/:prayer` | `{time?,enabled?,audioEnabled?,notificationEnabled?}` | update one prayer |
-| POST | `/schedule/publish` | — | snapshot → new `ScheduleVersion`, bump version, FCM fan-out |
+| PUT  | `/schedule` | `{timezone?, name?, defaultAudioId?}` | update schedule meta / default Azan audio (`defaultAudioId` may be null to clear) |
+| PUT  | `/schedule/prayers/:prayer` | `{time?,enabled?,audioEnabled?,notificationEnabled?,audioId?}` | update one prayer; `audioId` sets this prayer's custom Azan (null ⇒ use default) |
+| POST | `/schedule/publish` | — | snapshot (prayers + per-prayer audio + default + future announcements) → new `ScheduleVersion`, bump version, FCM fan-out |
 | GET  | `/schedule/versions` | — | list published versions |
 
 ## Schedule (device / public read)
@@ -28,15 +28,28 @@ Access token TTL ~15m, refresh ~30d, rotated on use. Passwords bcrypt-hashed.
 |---|---|---|---|
 | GET | `/schedule/current` | device | latest **published** payload (shape in DATABASE.md). 200 or 404 if never published. Supports `If-None-Match` ETag = version. |
 
-## Audio
+## Audio library (Azan clips + announcement recordings)
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/audio` | admin | multipart `file` (MP3). Validates mime+size, computes sha256, bumps audio version, sets active. |
-| GET  | `/audio` | admin | list audio metadata |
+| POST | `/audio` | admin | multipart `file` (MP3) + optional `label`, `kind` ("AZAN"\|"ANNOUNCEMENT", default AZAN). Validates mime+size, computes sha256, assigns a new `version`, adds to the library (does **not** deactivate others). → the audio row (incl. `id`, `version`). |
+| GET  | `/audio` | admin | list the audio library (id, label, kind, version, size, checksum, createdAt) |
 | GET  | `/audio/:version/meta` | device/admin | metadata for a version |
 | GET  | `/audio/:version/file` | device/admin | streams the MP3 (supports Range) |
 
 Upload limits: mimetype `audio/mpeg`, max 10MB (configurable via `MAX_AUDIO_MB`).
+The admin assigns audios to prayers via `PUT /schedule/prayers/:prayer {audioId}` and the fallback
+via `PUT /schedule {defaultAudioId}`.
+
+## Announcements (admin-scheduled one-off broadcasts)
+| Method | Path | Auth | Body / Notes |
+|---|---|---|---|
+| POST | `/announcements` | admin | multipart: `audio` (MP3 file, creates an ANNOUNCEMENT audio) **or** `audioId` (reuse existing) + `scheduledAt` (ISO 8601 instant), `label?`, `enabled?` (default true). Creates the announcement, then auto-publishes a new `ScheduleVersion` + FCM so devices schedule it. |
+| GET  | `/announcements` | admin | list announcements (newest scheduledAt first) with resolved audio meta |
+| PUT  | `/announcements/:id` | admin | `{scheduledAt?, label?, enabled?, audioId?}` → auto-publish + FCM |
+| DELETE | `/announcements/:id` | admin | remove → auto-publish + FCM |
+
+Only **enabled** announcements with `scheduledAt` in the future are included in the published
+payload. Announcement mutations trigger a publish (version bump) automatically so devices re-arm.
 
 ## Devices
 | Method | Path | Auth | Body / Notes |

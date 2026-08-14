@@ -15,14 +15,23 @@ import {
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
 import {
+  getAudioList,
   getSchedule,
   getScheduleVersions,
   publishSchedule,
+  setDefaultAudio,
   updatePrayer,
   updateScheduleMeta,
 } from "@/lib/services";
 import { ApiRequestError } from "@/lib/api";
-import { PRAYERS, type Prayer, type PrayerTime, type Schedule, type ScheduleVersion } from "@/lib/types";
+import {
+  PRAYERS,
+  type AzanAudio,
+  type Prayer,
+  type PrayerTime,
+  type Schedule,
+  type ScheduleVersion,
+} from "@/lib/types";
 import { formatDateTime, isValidTime, PRAYER_LABELS } from "@/lib/format";
 
 type ToggleField = "enabled" | "audioEnabled" | "notificationEnabled";
@@ -36,8 +45,10 @@ export default function SchedulePage() {
   const toast = useToast();
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [versions, setVersions] = useState<ScheduleVersion[]>([]);
+  const [audios, setAudios] = useState<AzanAudio[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingDefault, setSavingDefault] = useState(false);
 
   // Local edit state for prayer times (so typing doesn't fire a request per keystroke).
   const [timeDraft, setTimeDraft] = useState<Record<string, string>>({});
@@ -51,12 +62,14 @@ export default function SchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      const [s, v] = await Promise.all([
+      const [s, v, a] = await Promise.all([
         getSchedule(),
         getScheduleVersions().catch(() => [] as ScheduleVersion[]),
+        getAudioList().catch(() => [] as AzanAudio[]),
       ]);
       setSchedule(s);
       setVersions(v);
+      setAudios(a);
       setTimezone(s.timezone || "");
       const drafts: Record<string, string> = {};
       s.prayers?.forEach((p) => (drafts[p.prayer] = p.time));
@@ -129,6 +142,50 @@ export default function SchedulePage() {
     }
   }
 
+  async function savePrayerAudio(p: Prayer, audioId: string | null) {
+    const current = prayerFor(p);
+    const prev = current?.audioId ?? null;
+    if (prev === audioId) return; // no change
+    setBusyPrayer(p);
+    patchLocalPrayer(p, { audioId });
+    try {
+      await updatePrayer(p, { audioId });
+      toast.success(
+        audioId
+          ? `${PRAYER_LABELS[p]} Azan audio updated.`
+          : `${PRAYER_LABELS[p]} now uses the default Azan audio.`
+      );
+    } catch (e) {
+      patchLocalPrayer(p, { audioId: prev });
+      toast.error(errMsg(e, `Failed to update ${PRAYER_LABELS[p]} audio.`));
+    } finally {
+      setBusyPrayer(null);
+    }
+  }
+
+  async function saveDefaultAudio(audioId: string | null) {
+    const prev = schedule?.defaultAudioId ?? null;
+    if (prev === audioId) return;
+    setSavingDefault(true);
+    setSchedule((s) => (s ? { ...s, defaultAudioId: audioId } : s));
+    try {
+      const updated = await setDefaultAudio(audioId);
+      setSchedule((s) =>
+        s ? { ...s, defaultAudioId: updated.defaultAudioId ?? audioId } : s
+      );
+      toast.success(
+        audioId
+          ? "Default Azan audio updated."
+          : "Default Azan audio cleared (notification only)."
+      );
+    } catch (e) {
+      setSchedule((s) => (s ? { ...s, defaultAudioId: prev } : s));
+      toast.error(errMsg(e, "Failed to update the default Azan audio."));
+    } finally {
+      setSavingDefault(false);
+    }
+  }
+
   async function saveTimezone() {
     if (!timezone.trim()) {
       toast.error("Timezone cannot be empty (e.g. Asia/Dhaka).");
@@ -185,11 +242,20 @@ export default function SchedulePage() {
       ? [...versions].sort((a, b) => b.version - a.version)[0]
       : null;
 
+  // Only Azan-kind clips are assignable to prayers / as the default.
+  const azanAudios = audios
+    .filter((a) => (a.kind || "AZAN") === "AZAN")
+    .sort((a, b) => b.version - a.version);
+
+  function audioLabel(a: AzanAudio): string {
+    return `${a.label || a.filename} · v${a.version}`;
+  }
+
   return (
     <>
       <PageHeader
         title="Schedule"
-        description="Set prayer times, toggles and publish to devices"
+        description="Set prayer times, per-prayer Azan audio and toggles. Publish to push changes to devices."
         action={
           <div className="flex items-center gap-2">
             {schedule.isPublished ? (
@@ -204,11 +270,56 @@ export default function SchedulePage() {
         }
       />
 
+      {/* Default Azan audio */}
+      <Card className="mb-6">
+        <CardHeader
+          title="Default Azan audio"
+          description="The fallback Azan played for any prayer without its own custom clip."
+        />
+        <div className="flex flex-wrap items-end gap-3 px-5 py-4">
+          <div className="flex-1">
+            <label
+              htmlFor="default-audio"
+              className="mb-1.5 block text-sm font-medium text-slate-700"
+            >
+              Default Azan clip
+            </label>
+            <select
+              id="default-audio"
+              value={schedule.defaultAudioId ?? ""}
+              disabled={savingDefault}
+              onChange={(e) =>
+                saveDefaultAudio(e.target.value === "" ? null : e.target.value)
+              }
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-60 sm:max-w-md"
+            >
+              <option value="">No default (notification only)</option>
+              {azanAudios.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {audioLabel(a)}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-400">
+              {azanAudios.length === 0
+                ? "No Azan clips in the library yet — upload one on the Azan Audio page."
+                : "Applies to prayers set to “Default”. Publish to push to devices."}
+            </p>
+          </div>
+          {savingDefault && (
+            <span
+              aria-hidden
+              className="mb-2 h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent"
+            />
+          )}
+        </div>
+      </Card>
+
       {/* Prayer times */}
       <Card>
         <CardHeader
           title="Prayer times"
-          description="24-hour format (HH:mm). Toggle audio and notifications per prayer."
+          description="24-hour format (HH:mm). Choose an Azan clip and toggle audio/notifications per prayer."
         />
         <div className="divide-y divide-slate-100">
           {/* Header row (desktop) */}
@@ -227,9 +338,9 @@ export default function SchedulePage() {
             const invalid = draft.length > 0 && !isValidTime(draft);
             const busy = busyPrayer === p;
             return (
+              <div key={p} className="px-5 py-4">
               <div
-                key={p}
-                className="grid grid-cols-2 items-center gap-4 px-5 py-4 sm:grid-cols-12"
+                className="grid grid-cols-2 items-center gap-4 sm:grid-cols-12"
               >
                 <div className="col-span-2 flex items-center gap-2 sm:col-span-3">
                   <span
@@ -300,6 +411,41 @@ export default function SchedulePage() {
                     onChange={(v) => saveToggle(p, "notificationEnabled", v)}
                   />
                 </div>
+              </div>
+
+              {/* Per-prayer Azan audio */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-2 sm:pl-10">
+                <label
+                  htmlFor={`audio-${p}`}
+                  className="text-xs font-medium uppercase tracking-wide text-slate-400"
+                >
+                  Azan audio
+                </label>
+                <select
+                  id={`audio-${p}`}
+                  value={pt.audioId ?? ""}
+                  disabled={busy}
+                  onChange={(e) =>
+                    savePrayerAudio(
+                      p,
+                      e.target.value === "" ? null : e.target.value
+                    )
+                  }
+                  className="min-w-[220px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-60"
+                >
+                  <option value="">
+                    Default
+                    {schedule.defaultAudioId
+                      ? ""
+                      : " (notification only)"}
+                  </option>
+                  {azanAudios.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {audioLabel(a)}
+                    </option>
+                  ))}
+                </select>
+              </div>
               </div>
             );
           })}

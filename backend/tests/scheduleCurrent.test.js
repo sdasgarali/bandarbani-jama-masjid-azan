@@ -47,10 +47,21 @@ describe('Schedule (device / current)', () => {
 
     const p = res.body.data;
     expect(Object.keys(p).sort()).toEqual(
-      ['audio', 'prayers', 'publishedAt', 'timezone', 'version'].sort()
+      [
+        'announcements',
+        'audios',
+        'defaultAudioId',
+        'prayers',
+        'publishedAt',
+        'timezone',
+        'version',
+      ].sort()
     );
     expect(p.version).toBe(1);
     expect(p.timezone).toBe('Asia/Dhaka');
+    expect(p.defaultAudioId).toBeNull();
+    expect(p.audios).toEqual([]);
+    expect(p.announcements).toEqual([]);
     expect(p.prayers).toHaveLength(5);
     expect(p.prayers[0]).toEqual({
       prayer: 'FAJR',
@@ -58,6 +69,7 @@ describe('Schedule (device / current)', () => {
       enabled: true,
       audioEnabled: true,
       notificationEnabled: true,
+      audioId: null,
     });
   });
 

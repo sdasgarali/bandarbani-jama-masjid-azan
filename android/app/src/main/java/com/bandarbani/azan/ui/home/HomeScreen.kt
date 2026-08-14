@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Card
@@ -53,6 +54,7 @@ fun HomeScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val updateDialogVisible by viewModel.updateDialogVisible.collectAsStateWithLifecycle()
+    val nextAnnouncement by viewModel.nextAnnouncement.collectAsStateWithLifecycle()
 
     // Check for an app update once when Home is first shown (offline-safe; never blocks the UI).
     LaunchedEffect(Unit) { viewModel.checkForUpdateOnLoad() }
@@ -107,6 +109,7 @@ fun HomeScreen(
                     onClick = viewModel::showUpdateDialog,
                 )
             }
+            nextAnnouncement?.let { AnnouncementChip(it, state.timezone) }
             DateHeader(state)
             NextPrayerCard(state)
             TodayTimesCard(state)
@@ -143,6 +146,36 @@ private fun UpdateBanner(versionName: String, onClick: () -> Unit) {
                 Text("Update available", fontWeight = FontWeight.Bold)
                 Text(
                     "Version $versionName — tap to update",
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnnouncementChip(announcement: NextAnnouncementUi, timezone: String) {
+    val zone = runCatching { ZoneId.of(timezone) }.getOrDefault(ZoneId.systemDefault())
+    val whenText = java.time.Instant.ofEpochMilli(announcement.scheduledAtEpochMillis)
+        .atZone(zone)
+        .format(DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.getDefault()))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(Icons.Filled.Campaign, contentDescription = null)
+            Column(Modifier.weight(1f)) {
+                Text("Upcoming announcement", fontWeight = FontWeight.Bold)
+                Text(
+                    "${announcement.label} — $whenText",
                     style = MaterialTheme.typography.labelLarge,
                 )
             }

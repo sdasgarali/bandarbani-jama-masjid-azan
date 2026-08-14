@@ -16,6 +16,9 @@
     <string name="notif_prayer_title">%1$s</string>
     <string name="notif_prayer_text">It is time for %1$s prayer.</string>
 
+    <!-- Scheduled announcements -->
+    <string name="notif_announcement_text">Masjid announcement is playing.</string>
+
     <!-- In-app update -->
     <string name="notif_update_title">Update available</string>
     <string name="notif_update_text">A new version (%1$s) is available — tap to update.</string>

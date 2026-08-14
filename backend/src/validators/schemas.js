@@ -1,6 +1,27 @@
 import { z } from 'zod';
 
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+
+// A 24-hex Mongo ObjectId, or null (to clear a reference). Multipart sends the
+// literal strings "null"/"" — treat those as null too.
+const objectIdOrNull = z
+  .union([z.string(), z.null()])
+  .transform((v) => {
+    if (v === null) return null;
+    const t = v.trim();
+    if (t === '' || t.toLowerCase() === 'null') return null;
+    return t;
+  })
+  .refine((v) => v === null || OBJECT_ID.test(v), {
+    message: 'must be a 24-character hex ObjectId or null',
+  });
+
+// A required 24-hex Mongo ObjectId (no null).
+const objectId = z
+  .string()
+  .trim()
+  .refine((v) => OBJECT_ID.test(v), { message: 'must be a 24-character hex ObjectId' });
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -18,6 +39,8 @@ export const logoutSchema = z.object({
 export const scheduleMetaSchema = z.object({
   timezone: z.string().min(1),
   name: z.string().min(1).optional(),
+  // Default fallback Azan audio; may be null to clear it.
+  defaultAudioId: objectIdOrNull.optional(),
 });
 
 export const prayerParamSchema = z.object({
@@ -30,6 +53,8 @@ export const prayerUpdateSchema = z
     enabled: z.boolean().optional(),
     audioEnabled: z.boolean().optional(),
     notificationEnabled: z.boolean().optional(),
+    // This prayer's custom Azan; may be null to fall back to the schedule default.
+    audioId: objectIdOrNull.optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'At least one field required' });
 
@@ -90,4 +115,44 @@ export const appReleaseUploadSchema = z.object({
 
 export const appReleaseVersionParamSchema = z.object({
   versionCode: z.coerce.number().int().positive(),
+});
+
+// ─── Audio library upload (multipart form fields) ────────────────────────────
+export const audioUploadSchema = z.object({
+  label: z.string().trim().min(1).optional(),
+  kind: z
+    .union([z.string(), z.undefined()])
+    .transform((v) => (v === undefined || v === '' ? 'AZAN' : v.trim().toUpperCase()))
+    .pipe(z.enum(['AZAN', 'ANNOUNCEMENT'])),
+});
+
+// ─── Announcements ───────────────────────────────────────────────────────────
+// scheduledAt: an ISO-8601 instant. Coerce to Date and require a valid parse.
+const isoInstant = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => !Number.isNaN(Date.parse(v)), { message: 'must be an ISO-8601 date-time' })
+  .transform((v) => new Date(v));
+
+// POST /announcements — multipart. `audio` file (handled by multer) OR `audioId`.
+// When a file is present the controller ignores audioId; otherwise audioId is required.
+export const announcementCreateSchema = z.object({
+  label: z.string().trim().min(1).optional(),
+  scheduledAt: isoInstant,
+  enabled: booleanish.optional().default(true),
+  audioId: objectId.optional(),
+});
+
+export const announcementUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1).optional(),
+    scheduledAt: isoInstant.optional(),
+    enabled: booleanish.optional(),
+    audioId: objectId.optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: 'At least one field required' });
+
+export const announcementIdParamSchema = z.object({
+  id: objectId,
 });

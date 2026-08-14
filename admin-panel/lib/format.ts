@@ -47,6 +47,27 @@ export function isValidTime(value: string): boolean {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
 }
 
+// Convert a <input type="datetime-local"> value ("YYYY-MM-DDTHH:mm", interpreted in the
+// browser's local timezone) to an ISO 8601 instant (UTC). Returns null if invalid/empty.
+export function localInputToIso(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value); // datetime-local is parsed as local time
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+// Convert an ISO instant back to a datetime-local input value in the browser's local tz.
+export function isoToLocalInput(value: string | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
 export const PRAYER_LABELS: Record<string, string> = {
   FAJR: "Fajr",
   DHUHR: "Dhuhr",

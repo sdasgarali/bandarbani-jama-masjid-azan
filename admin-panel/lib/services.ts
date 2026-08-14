@@ -8,7 +8,9 @@ import {
 } from "./auth";
 import type {
   Admin,
+  Announcement,
   AppRelease,
+  AudioKind,
   AzanAudio,
   Device,
   LatestVersion,
@@ -85,7 +87,7 @@ export function getSchedule(): Promise<Schedule> {
 }
 
 export function updateScheduleMeta(payload: {
-  timezone: string;
+  timezone?: string;
   name?: string;
 }): Promise<Schedule> {
   return apiRequest<Schedule>("/schedule", {
@@ -94,12 +96,22 @@ export function updateScheduleMeta(payload: {
   });
 }
 
+// Set (or clear, with null) the fallback Azan audio for prayers without a custom clip.
+export function setDefaultAudio(
+  defaultAudioId: string | null
+): Promise<Schedule> {
+  return apiRequest<Schedule>("/schedule", {
+    method: "PUT",
+    body: { defaultAudioId },
+  });
+}
+
 export function updatePrayer(
   prayer: Prayer,
   payload: Partial<
     Pick<
       PrayerTime,
-      "time" | "enabled" | "audioEnabled" | "notificationEnabled"
+      "time" | "enabled" | "audioEnabled" | "notificationEnabled" | "audioId"
     >
   >
 ): Promise<PrayerTime> {
@@ -125,13 +137,55 @@ export function getAudioList(): Promise<AzanAudio[]> {
   return apiRequest<AzanAudio[]>("/audio");
 }
 
-export function uploadAudio(file: File): Promise<AzanAudio> {
+export function uploadAudio(
+  file: File,
+  opts?: { label?: string; kind?: AudioKind }
+): Promise<AzanAudio> {
   const form = new FormData();
   form.append("file", file);
+  if (opts?.label && opts.label.trim()) form.append("label", opts.label.trim());
+  if (opts?.kind) form.append("kind", opts.kind);
   return apiRequest<AzanAudio>("/audio", {
     method: "POST",
     body: form,
     raw: true,
+  });
+}
+
+// ---- Announcements ----
+
+export function listAnnouncements(): Promise<Announcement[]> {
+  return apiRequest<Announcement[]>("/announcements");
+}
+
+// Multipart create: either an `audio` MP3 file OR an existing `audioId`,
+// plus `scheduledAt` (ISO instant), optional `label` and `enabled`.
+export function createAnnouncement(form: FormData): Promise<Announcement> {
+  return apiRequest<Announcement>("/announcements", {
+    method: "POST",
+    body: form,
+    raw: true,
+  });
+}
+
+export function updateAnnouncement(
+  id: string,
+  body: {
+    scheduledAt?: string;
+    label?: string | null;
+    enabled?: boolean;
+    audioId?: string;
+  }
+): Promise<Announcement> {
+  return apiRequest<Announcement>(`/announcements/${id}`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export function deleteAnnouncement(id: string): Promise<void> {
+  return apiRequest<void>(`/announcements/${id}`, {
+    method: "DELETE",
   });
 }
 

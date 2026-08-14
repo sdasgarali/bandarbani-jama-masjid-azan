@@ -76,6 +76,29 @@ class NotificationHelper @Inject constructor(
         safeNotify(Constants.NOTIF_PRAYER_BASE_ID + prayer.ordinal, notif)
     }
 
+    /**
+     * Scheduled-announcement notification. Posted on the high-importance azan channel so it's
+     * heads-up like a prayer alert. [id] is the announcement id (used to derive a stable, distinct
+     * notification id so multiple announcements don't overwrite each other).
+     */
+    fun postAnnouncementNotification(id: String, label: String) {
+        val notif = NotificationCompat.Builder(context, Constants.CHANNEL_AZAN_ID)
+            .setSmallIcon(R.drawable.ic_azan_notification)
+            .setContentTitle(label)
+            .setContentText(context.getString(R.string.notif_announcement_text))
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(context.getString(R.string.notif_announcement_text)),
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(true)
+            .setContentIntent(mainActivityIntent())
+            .build()
+        val notifId = Constants.NOTIF_ANNOUNCEMENT_BASE_ID + (Math.floorMod(id.hashCode(), 1000))
+        safeNotify(notifId, notif)
+    }
+
     fun postSimpleNotification(title: String, body: String) {
         val notif = NotificationCompat.Builder(context, Constants.CHANNEL_GENERAL_ID)
             .setSmallIcon(R.drawable.ic_azan_notification)

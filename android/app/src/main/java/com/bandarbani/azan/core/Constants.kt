@@ -12,13 +12,29 @@ object Constants {
     const val NOTIF_TEST_ID = 3001
     const val NOTIF_UPDATE_ID = 4001
 
-    // Alarm request-code namespace. requestCode = BASE + prayer.ordinal (see AlarmScheduler).
+    // Notification ids for scheduled announcements. + announcement stable index (see below).
+    const val NOTIF_ANNOUNCEMENT_BASE_ID = 5000
+
+    // Alarm request-code namespace. Prayers occupy [ALARM_REQUEST_BASE, ALARM_REQUEST_BASE+9]
+    // (2 day-buckets * 5 prayers). Announcements live in a SEPARATE range that can never overlap
+    // the prayer space (see RequestCodes.announcement).
     const val ALARM_REQUEST_BASE = 10_000
+    const val ANNOUNCEMENT_REQUEST_BASE = 20_000
+
+    // Intent action + type discriminator for the alarm receiver.
+    const val EXTRA_TYPE = "extra_type"
+    const val TYPE_PRAYER = "PRAYER"
+    const val TYPE_ANNOUNCEMENT = "ANNOUNCEMENT"
 
     // Intent extras passed from AlarmScheduler -> AzanAlarmReceiver.
     const val EXTRA_PRAYER = "extra_prayer"
     const val EXTRA_SCHEDULE_VERSION = "extra_schedule_version"
     const val EXTRA_EPOCH_DAY = "extra_epoch_day"
+    /** Resolved audio version to play for this fire (prayer or announcement); -1 = none. */
+    const val EXTRA_AUDIO_VERSION = "extra_audio_version"
+    // Announcement extras.
+    const val EXTRA_ANNOUNCEMENT_ID = "extra_announcement_id"
+    const val EXTRA_ANNOUNCEMENT_LABEL = "extra_announcement_label"
 
     // Playback service extras
     const val EXTRA_AUDIO_PATH = "extra_audio_path"

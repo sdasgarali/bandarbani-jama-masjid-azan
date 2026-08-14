@@ -67,9 +67,9 @@ interface AzanApi {
     suspend fun latestVersion(): ApiEnvelope<LatestVersionDto>
 
     /**
-     * Streams the MP3 for a given version. We pass a full/relative URL so the payload's
-     * `audio.url` (e.g. "/api/v1/audio/3/file") can be used directly. @Streaming avoids loading
-     * the whole body into memory — the worker copies to a temp file.
+     * Streams the MP3 for a given audio. The caller passes an absolute URL built from
+     * BuildConfig.API_BASE_URL + the payload's relative `audio.path` (see AudioSyncWorker.downloadUrl).
+     * @Streaming avoids loading the whole body into memory — the worker copies to a temp file.
      */
     @Streaming
     @GET

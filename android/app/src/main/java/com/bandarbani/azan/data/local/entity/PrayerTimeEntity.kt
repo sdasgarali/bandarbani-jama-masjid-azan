@@ -16,4 +16,6 @@ data class PrayerTimeEntity(
     val enabled: Boolean,
     val audioEnabled: Boolean,
     val notificationEnabled: Boolean,
+    /** This prayer's custom Azan audio id; null ⇒ resolve to the schedule's defaultAudioId. */
+    val audioId: String? = null,
 )

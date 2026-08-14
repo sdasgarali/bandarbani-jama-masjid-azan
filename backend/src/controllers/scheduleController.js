@@ -2,9 +2,16 @@ import { prisma } from '../config/prisma.js';
 import { AppError } from '../utils/errors.js';
 import { ok } from '../utils/respond.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { getSchedule, buildPayload, sortPrayers } from '../services/schedule.js';
+import { getSchedule, publishSchedule, sortPrayers } from '../services/schedule.js';
 import { writeAudit } from '../services/audit.js';
 import { sendScheduleUpdated } from '../services/fcm.js';
+
+// Ensure an audioId references an existing AzanAudio (null passes through).
+async function assertAudioExists(audioId) {
+  if (audioId == null) return;
+  const audio = await prisma.azanAudio.findUnique({ where: { id: audioId } });
+  if (!audio) throw new AppError('NOT_FOUND', `Audio ${audioId} not found`);
+}
 
 // GET /schedule — current draft + prayer times (admin).
 export const getDraft = asyncHandler(async (_req, res) => {
@@ -15,34 +22,48 @@ export const getDraft = asyncHandler(async (_req, res) => {
     timezone: schedule.timezone,
     currentVersion: schedule.currentVersion,
     isPublished: schedule.isPublished,
+    defaultAudioId: schedule.defaultAudioId ?? null,
     prayers: schedule.prayers.map((p) => ({
       prayer: p.prayer,
       time: p.time,
       enabled: p.enabled,
       audioEnabled: p.audioEnabled,
       notificationEnabled: p.notificationEnabled,
+      audioId: p.audioId ?? null,
     })),
     updatedAt: schedule.updatedAt,
   });
 });
 
-// PUT /schedule — update meta.
+// PUT /schedule — update meta (timezone / name / default Azan audio).
 export const updateMeta = asyncHandler(async (req, res) => {
   const schedule = await getSchedule();
-  const { timezone, name } = req.body;
+  const { timezone, name, defaultAudioId } = req.body;
+
+  const data = { timezone, ...(name ? { name } : {}) };
+  if (defaultAudioId !== undefined) {
+    await assertAudioExists(defaultAudioId);
+    data.defaultAudioId = defaultAudioId; // may be null to clear
+  }
+
   const updated = await prisma.prayerSchedule.update({
     where: { id: schedule.id },
-    data: { timezone, ...(name ? { name } : {}) },
+    data,
   });
   await writeAudit({
     adminId: req.admin.id,
     action: 'SCHEDULE_UPDATE_META',
     entity: 'PrayerSchedule',
     entityId: updated.id,
-    metadata: { timezone, name },
+    metadata: { timezone, name, defaultAudioId },
     ip: req.ip,
   });
-  return ok(res, { id: updated.id, name: updated.name, timezone: updated.timezone });
+  return ok(res, {
+    id: updated.id,
+    name: updated.name,
+    timezone: updated.timezone,
+    defaultAudioId: updated.defaultAudioId ?? null,
+  });
 });
 
 // PUT /schedule/prayers/:prayer — update one prayer.
@@ -55,9 +76,10 @@ export const updatePrayer = asyncHandler(async (req, res) => {
   if (!existing) throw new AppError('NOT_FOUND', `Prayer ${prayer} not found`);
 
   const data = {};
-  for (const key of ['time', 'enabled', 'audioEnabled', 'notificationEnabled']) {
+  for (const key of ['time', 'enabled', 'audioEnabled', 'notificationEnabled', 'audioId']) {
     if (req.body[key] !== undefined) data[key] = req.body[key];
   }
+  if (data.audioId !== undefined) await assertAudioExists(data.audioId);
 
   const updated = await prisma.prayerTime.update({
     where: { id: existing.id },
@@ -77,53 +99,28 @@ export const updatePrayer = asyncHandler(async (req, res) => {
     enabled: updated.enabled,
     audioEnabled: updated.audioEnabled,
     notificationEnabled: updated.notificationEnabled,
+    audioId: updated.audioId ?? null,
   });
 });
 
 // POST /schedule/publish — snapshot → new ScheduleVersion, bump version, FCM fan-out.
 export const publish = asyncHandler(async (req, res) => {
-  const schedule = await getSchedule();
-  const activeAudio = await prisma.azanAudio.findFirst({ where: { isActive: true } });
-
-  const nextVersion = schedule.currentVersion + 1;
-  const publishedAt = new Date();
-
-  const payload = buildPayload({
-    version: nextVersion,
-    timezone: schedule.timezone,
-    prayers: schedule.prayers,
-    audio: activeAudio,
-    publishedAt,
-  });
-
-  const version = await prisma.scheduleVersion.create({
-    data: {
-      scheduleId: schedule.id,
-      version: nextVersion,
-      timezone: schedule.timezone,
-      payload,
-      publishedById: req.admin.id,
-      publishedAt,
-    },
-  });
-
-  await prisma.prayerSchedule.update({
-    where: { id: schedule.id },
-    data: { currentVersion: nextVersion, isPublished: true },
+  const { version, publishedAt, versionRow } = await publishSchedule({
+    publishedById: req.admin.id,
   });
 
   await writeAudit({
     adminId: req.admin.id,
     action: 'SCHEDULE_PUBLISH',
     entity: 'ScheduleVersion',
-    entityId: version.id,
-    metadata: { version: nextVersion },
+    entityId: versionRow.id,
+    metadata: { version },
     ip: req.ip,
   });
 
-  const fcm = await sendScheduleUpdated(nextVersion);
+  const fcm = await sendScheduleUpdated(version);
 
-  return ok(res, { version: nextVersion, publishedAt: publishedAt.toISOString(), fcm }, 201);
+  return ok(res, { version, publishedAt: publishedAt.toISOString(), fcm }, 201);
 });
 
 // GET /schedule/versions — list published versions.

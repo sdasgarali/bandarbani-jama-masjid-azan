@@ -119,10 +119,22 @@ class Model {
     return this.create({ data: create, select });
   }
 
-  async deleteMany() {
-    const count = this.rows.length;
-    this.rows = [];
-    return { count };
+  async delete({ where }) {
+    const idx = this.rows.findIndex((r) => matchWhere(r, where));
+    if (idx === -1) throw new Error('Record to delete not found');
+    const [removed] = this.rows.splice(idx, 1);
+    return { ...removed };
+  }
+
+  async deleteMany({ where } = {}) {
+    if (!where) {
+      const count = this.rows.length;
+      this.rows = [];
+      return { count };
+    }
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => !matchWhere(r, where));
+    return { count: before - this.rows.length };
   }
 }
 
@@ -130,10 +142,16 @@ export function createMemoryPrisma() {
   const client = {
     admin: new Model({ role: 'admin', name: null }),
     refreshToken: new Model({ revokedAt: null }),
-    prayerSchedule: new Model({ currentVersion: 0, isPublished: false }),
-    prayerTime: new Model({ enabled: true, audioEnabled: true, notificationEnabled: true }),
+    prayerSchedule: new Model({ currentVersion: 0, isPublished: false, defaultAudioId: null }),
+    prayerTime: new Model({
+      enabled: true,
+      audioEnabled: true,
+      notificationEnabled: true,
+      audioId: null,
+    }),
     scheduleVersion: new Model({ publishedAt: () => new Date() }),
-    azanAudio: new Model({ isActive: false, durationMs: null }),
+    azanAudio: new Model({ isActive: false, durationMs: null, label: null, kind: 'AZAN' }),
+    announcement: new Model({ enabled: true, label: null, createdById: null }),
     appRelease: new Model({ mandatory: false, notes: null, uploadedById: null }),
     appConfig: new Model({}),
     device: new Model({ platform: 'android', status: 'ACTIVE', lastActiveAt: () => new Date() }),

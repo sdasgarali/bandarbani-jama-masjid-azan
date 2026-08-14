@@ -94,7 +94,10 @@ describe('Schedule (admin)', () => {
     expect(payload).toHaveProperty('version', 1);
     expect(payload).toHaveProperty('timezone', 'Asia/Dhaka');
     expect(payload.prayers).toHaveLength(5);
-    expect(payload).toHaveProperty('audio');
+    expect(payload).toHaveProperty('defaultAudioId', null);
+    expect(payload).toHaveProperty('audios', []);
+    expect(payload).toHaveProperty('announcements', []);
+    expect(payload.prayers[0]).toHaveProperty('audioId', null);
     expect(payload).toHaveProperty('publishedAt');
   });
 
@@ -117,5 +120,98 @@ describe('Schedule (admin)', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.data.versions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // Seed a library audio row directly (bypasses file upload for unit focus).
+  async function seedAudio(prismaClient, { version, kind = 'AZAN', label = null } = {}) {
+    return prismaClient.azanAudio.create({
+      data: {
+        label,
+        kind,
+        filename: `azan-${version}.mp3`,
+        storedName: `stored-${version}.mp3`,
+        mimeType: 'audio/mpeg',
+        sizeBytes: 1000 + version,
+        checksumSha256: `checksum-${version}`,
+        version,
+        isActive: false,
+      },
+    });
+  }
+
+  it('publish reflects default + per-prayer audio and dedupes audios[]', async () => {
+    const a1 = await seedAudio(prisma, { version: 1, label: 'Default Azan' });
+    const a2 = await seedAudio(prisma, { version: 2, label: 'Makkah Azan' });
+
+    // Set the schedule default.
+    const meta = await request(app)
+      .put('/api/v1/schedule')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ timezone: 'Asia/Dhaka', defaultAudioId: a1.id });
+    expect(meta.status).toBe(200);
+    expect(meta.body.data.defaultAudioId).toBe(a1.id);
+
+    // Assign a2 to FAJR and MAGHRIB (a2 referenced twice → must dedupe).
+    for (const prayer of ['FAJR', 'MAGHRIB']) {
+      const r = await request(app)
+        .put(`/api/v1/schedule/prayers/${prayer}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ audioId: a2.id });
+      expect(r.status).toBe(200);
+      expect(r.body.data.audioId).toBe(a2.id);
+    }
+
+    const pub = await request(app)
+      .post('/api/v1/schedule/publish')
+      .set('Authorization', `Bearer ${token}`);
+    expect(pub.status).toBe(201);
+
+    const version = await prisma.scheduleVersion.findFirst({ orderBy: { version: 'desc' } });
+    const payload = version.payload;
+    expect(payload.defaultAudioId).toBe(a1.id);
+
+    // audios[] contains a1 (default) + a2 (prayers), deduped → exactly 2.
+    expect(payload.audios).toHaveLength(2);
+    const ids = payload.audios.map((x) => x.id).sort();
+    expect(ids).toEqual([a1.id, a2.id].sort());
+    const refA2 = payload.audios.find((x) => x.id === a2.id);
+    expect(refA2).toMatchObject({
+      id: a2.id,
+      label: 'Makkah Azan',
+      version: 2,
+      path: 'audio/2/file',
+      checksumSha256: 'checksum-2',
+      sizeBytes: 1002,
+      mimeType: 'audio/mpeg',
+    });
+
+    // Per-prayer audioId reflected.
+    const fajr = payload.prayers.find((p) => p.prayer === 'FAJR');
+    const dhuhr = payload.prayers.find((p) => p.prayer === 'DHUHR');
+    expect(fajr.audioId).toBe(a2.id);
+    expect(dhuhr.audioId).toBeNull();
+  });
+
+  it('rejects setting a non-existent defaultAudioId (404)', async () => {
+    const res = await request(app)
+      .put('/api/v1/schedule')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ timezone: 'Asia/Dhaka', defaultAudioId: '0123456789abcdef01234567' });
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('NOT_FOUND');
+  });
+
+  it('clears a prayer audioId with null', async () => {
+    const a1 = await seedAudio(prisma, { version: 1 });
+    await request(app)
+      .put('/api/v1/schedule/prayers/FAJR')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ audioId: a1.id });
+    const cleared = await request(app)
+      .put('/api/v1/schedule/prayers/FAJR')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ audioId: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data.audioId).toBeNull();
   });
 });
