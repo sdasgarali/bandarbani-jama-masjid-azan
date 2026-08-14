@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Subtle geometric backdrop for auth screen (Islamic-modern, tasteful). */
+.pattern-bg {
+  background-color: #04291d;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(216, 158, 34, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 0%, rgba(28, 178, 108, 0.18), transparent 45%),
+    radial-gradient(circle at 50% 100%, rgba(28, 178, 108, 0.1), transparent 50%);
+}
+
+/* Respect reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

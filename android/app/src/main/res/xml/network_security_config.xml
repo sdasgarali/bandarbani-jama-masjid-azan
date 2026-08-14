@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network security configuration for a SELF-HOSTED backend.
+
+    Android 9 (API 28) and newer block cleartext (plain HTTP) traffic by default. This app is
+    designed to talk to a self-hosted server that the mosque runs on their own LAN or VPS, which
+    may only be reachable over http:// (e.g. http://192.168.1.50:4000 or http://<vps-ip>:4000).
+    To allow that, we permit cleartext traffic below.
+
+    SECURITY NOTE: this is a permissive dev/self-host configuration. If you front your backend with
+    HTTPS (recommended — e.g. a reverse proxy with a Let's Encrypt cert or a Tailscale/Cloudflare
+    tunnel), you can tighten this by removing cleartextTrafficPermitted or scoping it to a single
+    <domain> entry. A scoped example is left commented out for reference.
+-->
+<network-security-config>
+    <!-- Permissive base: allow cleartext HTTP to any host (needed for arbitrary LAN/VPS IPs). -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!--
+        Preferred, tighter alternative once your server IP/host is fixed: keep the app default
+        (cleartext denied) globally and permit it only for your server. Replace the placeholder,
+        remove the permissive <base-config> above, and uncomment:
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">192.168.1.50</domain>
+    </domain-config>
+    -->
+</network-security-config>

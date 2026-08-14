@@ -1,0 +1,22 @@
+# Normalize line endings across platforms
+* text=auto eol=lf
+
+# Windows scripts must stay CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Unix shell scripts / gradle wrapper must stay LF (executable on Linux/macOS)
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Binary files — never touch line endings
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.keystore binary
+*.jks binary
+*.apk binary
+*.mp3 binary

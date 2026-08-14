@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme applied before Compose takes over. Uses a Material3 no-action-bar splash-safe theme. -->
+    <style name="Theme.BandarbaniAzan" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/green700</item>
+        <item name="android:windowBackground">@color/cream</item>
+    </style>
+</resources>

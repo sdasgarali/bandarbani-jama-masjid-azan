@@ -1,0 +1,50 @@
+# Built application files
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle
+.gradle/
+build/
+/app/build/
+
+# Local configuration file (sdk path, etc.)
+local.properties
+
+# Log / OS files
+*.log
+.DS_Store
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore files — never commit signing material
+*.jks
+*.keystore
+# Release signing config (paths + passwords) — commit keystore.properties.example instead
+keystore.properties
+
+# Firebase — real config must never be committed (use google-services.json.example)
+google-services.json
+app/google-services.json
+
+# Version control
+*.orig

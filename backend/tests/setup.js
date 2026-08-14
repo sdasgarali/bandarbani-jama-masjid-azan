@@ -1,0 +1,10 @@
+process.env.NODE_ENV = 'test';
+process.env.JWT_ACCESS_SECRET = 'test-access-secret-000000000000';
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-00000000000';
+process.env.ACCESS_TTL = '15m';
+process.env.REFRESH_TTL = '30d';
+process.env.ADMIN_EMAIL = 'admin@test.local';
+process.env.ADMIN_PASSWORD = 'Test1234!';
+process.env.DATABASE_URL = 'mongodb://localhost:27017/azan_test';
+process.env.CORS_ORIGINS = '*';
+process.env.MAX_AUDIO_MB = '10';

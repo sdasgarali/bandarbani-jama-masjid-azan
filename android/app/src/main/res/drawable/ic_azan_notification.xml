@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <!-- Simple mosque dome + minaret glyph (monochrome for status bar). -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2C10.9,2 10,3.5 10,5.5C10,7 10.8,8 12,9C13.2,8 14,7 14,5.5C14,3.5 13.1,2 12,2Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,10L4,20L20,20L20,10C20,7 16.4,10 12,10C7.6,10 4,7 4,10Z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M11,14L13,14L13,20L11,20Z" />
+</vector>

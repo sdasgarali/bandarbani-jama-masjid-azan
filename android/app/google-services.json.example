@@ -1,0 +1,30 @@
+{
+  "_comment": "TEMPLATE ONLY — NOT a valid Firebase config. Copy this to app/google-services.json and replace ALL placeholder values with your own from the Firebase console (Project settings > Your apps > Android app). The real google-services.json is gitignored and MUST NOT be committed. The Android package name MUST be com.bandarbani.azan.",
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "YOUR_FIREBASE_PROJECT_ID",
+    "storage_bucket": "YOUR_FIREBASE_PROJECT_ID.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.bandarbani.azan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "YOUR_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

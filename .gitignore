@@ -1,0 +1,38 @@
+# ── Secrets (NEVER commit) ─────────────────────────────────────────────
+.env
+.env.local
+*.env
+!.env.example
+**/firebase-service-account.json
+**/google-services.json
+*.keystore
+*.jks
+
+# ── Node ───────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+coverage/
+*.log
+
+# ── Backend ────────────────────────────────────────────────────────────
+backend/uploads/
+backend/.env
+
+# ── Next.js (admin panel) ──────────────────────────────────────────────
+admin-panel/.next/
+admin-panel/out/
+admin-panel/.env.local
+
+# ── Android ────────────────────────────────────────────────────────────
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/captures/
+
+# ── OS / editor ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

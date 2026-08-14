@@ -1,0 +1,459 @@
+You are a senior Android + backend engineer. I want you to build a production-ready Azan (Adhan) Android application with an admin-controlled prayer schedule.
+
+PROJECT GOAL
+Build an Android app where an administrator controls the daily prayer/Azan schedule from a web-based admin panel. Users install the Android APK, sync the schedule, and the phone automatically plays a pre-recorded Azan audio at each scheduled prayer time—even when the app is closed and the phone is locked, subject to Android OS restrictions.
+
+CORE ARCHITECTURE
+
+1. ANDROID USER APP
+- Native Android application using Kotlin.
+- Modern Android architecture.
+- Jetpack Compose for UI.
+- Local persistent database using Room.
+- WorkManager where appropriate.
+- AlarmManager for exact prayer-time scheduling.
+- Firebase Cloud Messaging for configuration updates.
+- Local audio playback for Azan.
+- The app must NOT depend on an internet connection at the exact prayer time.
+- Once the schedule is synchronized, prayer alarms should be stored locally.
+- Handle device reboot and reschedule alarms.
+- Handle timezone changes.
+- Handle date changes.
+- Handle Android Doze/battery optimization as reliably as Android allows.
+- Handle Android 12+ exact alarm restrictions appropriately.
+- Handle Android 13+ notification permission.
+- Handle audio playback while the screen is locked.
+- Do not keep a permanent background service running unnecessarily.
+
+2. ADMIN PANEL
+Build a web admin dashboard using:
+- React or Next.js
+- Clean responsive UI
+- Admin authentication
+
+Admin features:
+- Login/logout
+- Dashboard
+- Set Fajr time
+- Set Dhuhr time
+- Set Asr time
+- Set Maghrib time
+- Set Isha time
+- Enable/disable individual prayers
+- Upload/change Azan audio
+- Publish schedule
+- Send test notification
+- Trigger test Azan on selected devices
+- View registered devices
+- View app versions
+- View last synchronization time
+- View active/inactive devices
+
+3. BACKEND API
+Use:
+- Node.js
+- Express.js
+- PostgreSQL
+- Prisma ORM
+- Firebase Admin SDK
+- REST API
+
+Create proper database models for:
+- Admin users
+- Prayer schedules
+- Prayer schedule versions
+- Prayer settings
+- Azan audio
+- Devices
+- FCM tokens
+- App configuration
+- Audit logs
+
+API should support:
+- Admin authentication
+- Create/update prayer schedule
+- Publish schedule
+- Fetch current published schedule
+- Register Android device
+- Update FCM token
+- Device heartbeat/sync
+- Download Azan metadata
+- Test notification
+- Remote configuration update
+
+4. IMPORTANT SCHEDULING DESIGN
+
+Do NOT make the Android app call the backend at prayer time.
+
+Instead:
+
+ADMIN
+  ↓
+Backend
+  ↓
+FCM/API sync
+  ↓
+Android app
+  ↓
+Store schedule locally
+  ↓
+Android AlarmManager
+  ↓
+Prayer time
+  ↓
+Play local Azan
+
+The Android app must schedule the next prayer alarms locally.
+
+When the admin changes the schedule:
+- Backend creates a new schedule version.
+- Android devices receive an FCM data message.
+- App fetches the new configuration.
+- App updates Room database.
+- App cancels outdated alarms.
+- App schedules the new alarms.
+
+If FCM is delayed or unavailable, the app should continue using its last valid local schedule.
+
+5. AUDIO REQUIREMENTS
+
+The Azan should be pre-recorded.
+
+Support:
+- MP3 initially
+- Download/cache the audio locally
+- Verify the download
+- Store the audio locally
+- Play from local storage at prayer time
+- Do not require internet at prayer time
+- Allow admin to replace the audio
+- Download new audio in the background
+- Do not delete the currently working audio until the new audio is successfully downloaded and validated.
+
+Implement reliable audio playback with Android Media3/ExoPlayer or the most appropriate modern Android solution.
+
+6. PRAYER SCHEDULE
+
+Initially support manually configured prayer times:
+
+Fajr
+Dhuhr
+Asr
+Maghrib
+Isha
+
+Example:
+
+Fajr: 04:18
+Dhuhr: 12:05
+Asr: 16:38
+Maghrib: 18:21
+Isha: 19:42
+
+Each prayer should have:
+- enabled
+- time
+- audio enabled
+- notification enabled
+
+Architecture should be extensible for future automatic location-based prayer calculations.
+
+7. ANDROID APP UI
+
+Create a clean Islamic-themed but modern interface.
+
+Home screen:
+- Current date
+- Current prayer
+- Next prayer
+- Countdown to next prayer
+- Today's prayer times
+- Prayer status
+- Azan enabled/disabled status
+- Last synchronization status
+
+Example:
+
+Azan
+
+Next Prayer
+ASR
+04:38 PM
+
+Time remaining
+01:24:35
+
+Today's Prayer Times
+
+Fajr       04:18 AM
+Dhuhr      12:05 PM
+Asr        04:38 PM
+Maghrib    06:21 PM
+Isha       07:42 PM
+
+Settings:
+- Azan on/off
+- Individual prayer on/off
+- Notification settings
+- Audio settings
+- Location
+- Synchronize now
+- Battery optimization guidance
+- App information
+
+8. FIRST INSTALLATION FLOW
+
+When user opens the app for the first time:
+
+1. Explain the purpose of the app.
+2. Ask notification permission.
+3. Ask necessary audio-related permissions/settings.
+4. Register device with backend.
+5. Obtain FCM token.
+6. Sync current schedule.
+7. Download/cache Azan audio.
+8. Schedule local alarms.
+9. Verify schedule.
+10. Show the home screen.
+
+9. DEVICE REGISTRATION
+
+Each installation should have a unique device identifier.
+
+Backend should store:
+- device ID
+- FCM token
+- app version
+- Android version
+- timezone
+- last sync
+- created date
+- last active date
+
+Do not collect unnecessary personal information.
+
+10. RELIABILITY
+
+This is extremely important.
+
+The application must correctly handle:
+
+- Phone reboot
+- App force-stop where technically possible
+- App update
+- Device timezone change
+- Daylight saving changes
+- Date change
+- Schedule update
+- FCM token refresh
+- Internet unavailable
+- Server unavailable
+- Audio download failure
+- Audio corruption
+- Battery optimization
+- Doze mode
+- Locked screen
+- Screen off
+- Different Android versions
+- Multiple alarms
+- Duplicate alarm scheduling
+
+Use BroadcastReceiver for BOOT_COMPLETED and relevant system changes where appropriate.
+
+Make alarm scheduling idempotent so the same prayer does not get scheduled multiple times.
+
+11. SECURITY
+
+Admin API must be protected.
+
+Implement:
+- Password hashing
+- JWT authentication
+- Refresh token strategy if appropriate
+- Input validation
+- Rate limiting
+- CORS configuration
+- Secure file upload validation
+- File type/size restrictions
+- API authorization
+- Environment variables for secrets
+- Never hardcode Firebase credentials
+- Never expose admin credentials in the Android app
+
+12. DATABASE
+
+Design a proper relational database.
+
+At minimum:
+
+Admin
+Device
+PrayerSchedule
+PrayerTime
+AzanAudio
+AppConfig
+AuditLog
+
+Use migrations.
+
+13. PROJECT STRUCTURE
+
+Create a clean monorepo:
+
+/azan-app
+  /android
+  /admin-panel
+  /backend
+  /docs
+
+Keep responsibilities separated.
+
+14. DEVELOPMENT APPROACH
+
+Do NOT generate a fake prototype that only looks good.
+
+Build actual working functionality.
+
+Before writing large amounts of code:
+
+1. Inspect the repository.
+2. Determine whether an existing project exists.
+3. Create an architecture document.
+4. Create database schema.
+5. Create API specification.
+6. Create implementation plan.
+7. Then implement incrementally.
+
+After each major component:
+- Run tests
+- Run linting
+- Build the project
+- Fix errors
+- Verify integration
+
+15. TESTING
+
+Create tests for:
+
+Backend:
+- Authentication
+- Schedule creation
+- Schedule publishing
+- Device registration
+- FCM token update
+- Schedule retrieval
+
+Android:
+- Schedule parsing
+- Alarm calculation
+- Alarm scheduling
+- Duplicate prevention
+- Reboot rescheduling
+- Schedule update
+- Audio caching
+- Audio playback
+- Timezone changes
+
+16. IMPORTANT ANDROID REAL-WORLD REQUIREMENT
+
+Research the current Android version behavior and implement the correct solution for exact alarms and audio playback.
+
+Do not assume that AlarmManager alone guarantees unrestricted execution on every Android device.
+
+If special permissions or user settings are necessary:
+- Detect them
+- Explain why they are needed
+- Guide the user through enabling them
+- Provide a fallback where possible
+
+Do not continuously run a background process just to wait for prayer time.
+
+17. FUTURE-READY ARCHITECTURE
+
+Design the system so we can later add:
+
+- Automatic prayer time calculation based on GPS
+- Multiple cities
+- Multiple mosques
+- Different Azan audio
+- Hanafi/Shafi calculation settings
+- Qibla direction
+- Islamic calendar
+- Ramadan mode
+- Jummah notification
+- Pre-Azan notification
+- Multi-language UI
+- Admin-controlled regions
+- Analytics
+
+But DO NOT implement all of these now.
+
+Focus on the reliable MVP first.
+
+18. DOCUMENTATION
+
+Create:
+
+/docs/ARCHITECTURE.md
+/docs/API.md
+/docs/DATABASE.md
+/docs/ANDROID_SCHEDULING.md
+/docs/DEPLOYMENT.md
+/docs/TESTING.md
+
+Include setup instructions for:
+- Backend
+- PostgreSQL
+- Firebase
+- Android
+- Admin panel
+- Environment variables
+- Local development
+- Production deployment
+
+19. ENVIRONMENT
+
+Use .env files and provide .env.example.
+
+Never commit:
+- API keys
+- Firebase service account
+- JWT secrets
+- Database passwords
+- Admin passwords
+
+20. FINAL ACCEPTANCE CRITERIA
+
+The MVP is complete only when:
+
+Admin can log in.
+Admin can set five prayer times.
+Admin can publish the schedule.
+Android app can register itself.
+Android app can sync the schedule.
+Android app stores the schedule locally.
+Android app downloads and caches the Azan.
+Android app schedules local prayer alarms.
+Azan plays at the configured time.
+App does not require internet at prayer time.
+Schedule changes propagate to devices.
+Old alarms are removed.
+New alarms are scheduled.
+Device reboot restores alarms.
+Duplicate alarms are prevented.
+Admin can see registered devices.
+Admin can send a test notification.
+The entire system can be run locally and deployed.
+
+IMPORTANT:
+Do not blindly assume a technical approach works on modern Android. Verify Android restrictions and use current official Android APIs and best practices.
+
+Start by inspecting the repository and then produce:
+1. Architecture proposal
+2. Folder structure
+3. Database design
+4. API design
+5. Android scheduling strategy
+6. Implementation roadmap
+
+Then begin implementing the MVP.

@@ -1,0 +1,172 @@
+// Azan (Adhan) backend — MongoDB Atlas via Prisma.
+// Applied with `prisma db push` (MongoDB is schemaless; no SQL migrations).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Prayer {
+  FAJR
+  DHUHR
+  ASR
+  MAGHRIB
+  ISHA
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Admin {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  passwordHash String
+  name         String?
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@map("admins")
+}
+
+model RefreshToken {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  adminId   String    @db.ObjectId
+  admin     Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+
+  @@index([adminId])
+  @@map("refresh_tokens")
+}
+
+model PrayerSchedule {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  timezone       String
+  currentVersion Int      @default(0)
+  isPublished    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  prayers  PrayerTime[]
+  versions ScheduleVersion[]
+
+  @@map("prayer_schedules")
+}
+
+model PrayerTime {
+  id                  String         @id @default(auto()) @map("_id") @db.ObjectId
+  scheduleId          String         @db.ObjectId
+  schedule            PrayerSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  prayer              Prayer
+  time                String // "HH:mm" 24h
+  enabled             Boolean        @default(true)
+  audioEnabled        Boolean        @default(true)
+  notificationEnabled Boolean        @default(true)
+
+  @@unique([scheduleId, prayer])
+  @@index([scheduleId])
+  @@map("prayer_times")
+}
+
+model ScheduleVersion {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  scheduleId    String         @db.ObjectId
+  schedule      PrayerSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  version       Int
+  timezone      String
+  payload       Json
+  publishedById String?        @db.ObjectId
+  publishedAt   DateTime       @default(now())
+
+  @@unique([scheduleId, version])
+  @@index([scheduleId])
+  @@map("schedule_versions")
+}
+
+model AzanAudio {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  filename       String
+  storedName     String
+  mimeType       String
+  sizeBytes      Int
+  checksumSha256 String
+  version        Int      @unique
+  durationMs     Int?
+  isActive       Boolean  @default(false)
+  uploadedById   String?  @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  @@index([isActive])
+  @@map("azan_audio")
+}
+
+model AppConfig {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("app_config")
+}
+
+model Device {
+  id               String       @id @default(auto()) @map("_id") @db.ObjectId
+  deviceId         String       @unique // app-generated uuid
+  deviceSecretHash String
+  platform         String       @default("android")
+  appVersion       String?
+  androidVersion   Int? // sdk int
+  model            String?
+  timezone         String?
+  status           DeviceStatus @default(ACTIVE)
+  lastSyncAt       DateTime?
+  lastActiveAt     DateTime     @default(now())
+  createdAt        DateTime     @default(now())
+
+  fcmTokens FcmToken[]
+
+  @@map("devices")
+}
+
+model FcmToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  deviceId  String   @db.ObjectId
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([deviceId])
+  @@index([isActive])
+  @@map("fcm_tokens")
+}
+
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  adminId   String?  @db.ObjectId
+  admin     Admin?   @relation(fields: [adminId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@map("audit_logs")
+}

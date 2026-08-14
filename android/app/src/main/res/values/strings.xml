@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bandarbani Azan</string>
+
+    <!-- Notification channels -->
+    <string name="channel_azan_id" translatable="false">azan_playback</string>
+    <string name="channel_general_id" translatable="false">general</string>
+    <string name="channel_azan_name">Azan &amp; Prayer Times</string>
+    <string name="channel_azan_desc">Plays the Azan and shows prayer-time alerts.</string>
+    <string name="channel_general_name">General</string>
+    <string name="channel_general_desc">General app notifications.</string>
+
+    <!-- Notifications -->
+    <string name="notif_playing_title">Azan</string>
+    <string name="notif_playing_text">Playing %1$s Azan</string>
+    <string name="notif_prayer_title">%1$s</string>
+    <string name="notif_prayer_text">It is time for %1$s prayer.</string>
+</resources>
